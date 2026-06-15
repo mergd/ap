@@ -8,6 +8,8 @@ const cloudflare: CatalogBundle = {
     "Auth: X-Auth-Email = CF_GLOBAL_EMAIL, X-Auth-Key = CF_GLOBAL_API_KEY (not Bearer).",
     "Inject vars with ap run --bundle cloudflare -- sh -c '...' when the command needs $VAR expansion.",
   ].join("\n"),
+  run_example:
+    'ap run --bundle cloudflare -- sh -c \'curl -sS -H "X-Auth-Email: $CF_GLOBAL_EMAIL" -H "X-Auth-Key: $CF_GLOBAL_API_KEY" https://api.cloudflare.com/client/v4/user\'',
   vars: {
     CF_GLOBAL_API_KEY: {
       visibility: "secret",
@@ -27,6 +29,8 @@ const namecheap: CatalogBundle = {
     "Every request needs query params ApiUser, ApiKey, ClientIp (NC_API_USER, NC_API_KEY, NC_CLIENT_IP).",
     "Whitelist NC_CLIENT_IP in Namecheap before calling the API.",
   ].join("\n"),
+  run_example:
+    'ap run --bundle namecheap -- sh -c \'curl -sS "https://api.namecheap.com/xml.response?ApiUser=$NC_API_USER&ApiKey=$NC_API_KEY&ClientIp=$NC_CLIENT_IP&Command=namecheap.users.getBalances"\'',
   vars: {
     NC_API_USER: {
       visibility: "public",

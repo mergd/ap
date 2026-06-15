@@ -12,5 +12,7 @@ export interface CatalogBundle {
   docs?: string;
   /** Agent instructions when the bundle is ready (auth shape, which vars, etc.) */
   prompt?: string;
+  /** Example ap run invocation for agents */
+  run_example?: string;
   vars: Record<string, CatalogVar>;
 }

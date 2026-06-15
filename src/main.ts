@@ -1,4 +1,3 @@
-
 import { join } from "node:path";
 import { runGlobalDoctor, runDoctor } from "./doctor.ts";
 import { printDoctor } from "./doctor-format.ts";
@@ -19,7 +18,6 @@ import {
   projectVaultDir,
   PROJECT_VAULT_DIR,
 } from "./paths.ts";
-import { loadResolveContext } from "./resolve.ts";
 import { runCommand } from "./run.ts";
 import { createVaultStore, readStdinSecret } from "./vault.ts";
 import type { Scope } from "./types.ts";
@@ -30,18 +28,23 @@ import { ensureDir, pathExists, readTextFile, writeTextFile } from "./fs-helpers
 import { formatValidateReports, runValidate } from "./validate.ts";
 import { printCatalogList } from "./catalog/list.ts";
 import { buildManifestFromCatalog, mergeCatalogBundles } from "./catalog/scaffold.ts";
+import { printGuide } from "./guide.ts";
+import { printCommands } from "./commands.ts";
+import {
+  doctorToAgentOutput,
+  parseOutputFormat,
+  printMachineOutput,
+  rejectRemovedFlags,
+  stripOutputFlags,
+} from "./agent-output.ts";
 
 function usage(): void {
   printHelp();
 }
 
-function wantsJson(args: string[]): boolean {
-  return args.includes("--json");
-}
-
 function stripFlags(args: string[]): string[] {
-  const result = args.filter((a) => a !== "--json");
-  for (const flag of ["--global", "--validate", "--from-env", "--unset"]) {
+  const result = stripOutputFlags(args);
+  for (const flag of ["--global", "--validate", "--from-env", "--unset", "--human"]) {
     const idx = result.indexOf(flag);
     if (idx >= 0) result.splice(idx, 1);
   }
@@ -189,7 +192,7 @@ async function cmdSet(
 }
 
 async function cmdDoctor(
-  json: boolean,
+  format: ReturnType<typeof parseOutputFormat>,
   globalOnly: boolean,
   validate: boolean,
   bundleFilter?: string,
@@ -203,10 +206,10 @@ async function cmdDoctor(
   if (validateReports && !validateReports.every((r) => r.ok)) {
     result.ready = false;
   }
+  if (validateReports) result.validate = validateReports;
 
-  if (json) {
-    const output = validateReports ? { ...result, validate: validateReports } : result;
-    console.log(JSON.stringify(output, null, 2));
+  if (format === "yaml") {
+    printMachineOutput(doctorToAgentOutput(result));
   } else {
     printDoctor(result);
     if (validateReports) formatValidateReports(validateReports, "validate");
@@ -276,7 +279,9 @@ async function main(): Promise<void> {
     process.exit(args.length === 0 ? 1 : 0);
   }
 
-  const json = wantsJson(args);
+  rejectRemovedFlags(args);
+
+  const format = parseOutputFormat(args);
   const positional = stripFlags(args);
 
   if (positional[0] === "help") {
@@ -285,10 +290,20 @@ async function main(): Promise<void> {
   }
 
   try {
+    if (positional[0] === "guide") {
+      printGuide(format);
+      return;
+    }
+
+    if (positional[0] === "commands") {
+      printCommands(format);
+      return;
+    }
+
     if (positional[0] === "catalog") {
       const sub = positional[1];
       if (sub === "list") {
-        printCatalogList(json);
+        printCatalogList(format);
         return;
       }
       console.error("Unknown catalog command. Use: ap catalog list");
@@ -330,7 +345,7 @@ async function main(): Promise<void> {
       }
       case "doctor":
         await cmdDoctor(
-          json,
+          format,
           args.includes("--global"),
           args.includes("--validate"),
           parseBundleFilter(args),

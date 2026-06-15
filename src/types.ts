@@ -108,3 +108,27 @@ export interface VaultStore {
   unset(key: string): Promise<boolean>;
   set(key: string, value: string): Promise<void>;
 }
+
+export interface AgentGuide {
+  version: number;
+  workflow: Array<Record<string, string>>;
+  rules: {
+    never_request_secrets_in_chat: boolean;
+    prefer_bundle_filter: boolean;
+  };
+  commands: Record<string, string>;
+  paths: Record<string, string>;
+}
+
+export interface CommandSpec {
+  name: string;
+  summary?: string;
+  agent?: boolean;
+  flags?: string[];
+  usage?: string;
+  subcommands?: Array<{
+    name: string;
+    summary?: string;
+    flags?: string[];
+  }>;
+}

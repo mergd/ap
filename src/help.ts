@@ -1,15 +1,34 @@
 const topics: Record<string, string> = {
-  doctor: `ap doctor — readiness check (primary agent entrypoint)
+  guide: `ap guide — agent contract (primary entrypoint)
 
-  ap doctor [--json] [--bundle NAME] [--global] [--validate]
+  ap guide [--human]
 
-  Checks bundle readiness. Repo ap.toml first, then global fallback.
+  YAML by default. Succinct workflow, rules, paths, and command references.
+
+  Examples:
+    ap guide
+    ap guide --human`,
+
+  commands: `ap commands — subcommand introspection
+
+  ap commands [--human]
+
+  YAML by default. Lists all subcommands, flags, and agent relevance.
+
+  Examples:
+    ap commands`,
+
+  doctor: `ap doctor — readiness check
+
+  ap doctor [--human] [--bundle NAME] [--global] [--validate]
+
+  YAML by default. Checks bundle readiness. Repo ap.toml first, then global fallback.
   --validate also lints manifests (inline secrets in git, bundle refs).
 
   Examples:
     ap doctor
-    ap doctor --bundle namecheap --json
-    ap doctor --validate`,
+    ap doctor --bundle namecheap
+    ap doctor --human`,
 
   edit: `ap edit — open manifests or secrets in $EDITOR
 
@@ -59,14 +78,15 @@ const topics: Record<string, string> = {
 
   ap skill install [--project]
 
+  Generates SKILL.md from ap guide (not a static copy).
   --project   install to .cursor/skills/ap/ in current repo
   (default)   install to ~/.cursor/skills/ap/ (all projects)`,
 
   catalog: `ap catalog list — available bundle templates
 
-  ap catalog list [--json]
+  ap catalog list [--human]
 
-  Templates copied into ~/.config/ap/manifest.toml via ap init --global.`,
+  YAML by default. Templates copied into ~/.config/ap/manifest.toml via ap init --global.`,
 };
 
 function mainHelp(): string {
@@ -75,16 +95,18 @@ function mainHelp(): string {
 Usage:
   ap help [topic]                  Per-command help
 
+  ap guide [--human]               Agent contract (YAML default)
+  ap commands [--human]            Subcommand introspection
   ap init [--global] [BUNDLE...]   Scaffold project or global manifest
-  ap catalog list [--json]         Available catalog bundles
+  ap catalog list [--human]        Available catalog bundles
   ap set KEY [--global] [--from-env] [--unset]
-  ap doctor [--json] [--bundle NAME] [--global] [--validate]
+  ap doctor [--human] [--bundle NAME] [--global] [--validate]
   ap run [--bundle NAME] -- <cmd...>
   ap edit <secrets|manifest|toml> [--global]
   ap skill install [--project]
 
 Topics: ${Object.keys(topics).join(", ")}
-  ap help doctor`;
+  ap help guide`;
 }
 
 export function printHelp(topic?: string): void {

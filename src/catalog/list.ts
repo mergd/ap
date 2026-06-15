@@ -1,22 +1,25 @@
 import { listCatalogBundles, getCatalogBundle } from "./bundles.ts";
+import type { OutputFormat } from "../agent-output.ts";
+import { printMachineOutput } from "../agent-output.ts";
 
-export function formatCatalogList(json: boolean): string | void {
+function buildCatalogOutput(): { bundles: Record<string, unknown> } {
   const names = listCatalogBundles();
-
-  if (json) {
-    const bundles: Record<string, unknown> = {};
-    for (const name of names) {
-      const entry = getCatalogBundle(name)!;
-      bundles[name] = {
-        vars: Object.keys(entry.vars),
-        ask: entry.ask,
-        docs: entry.docs,
-        prompt: entry.prompt,
-      };
-    }
-    return JSON.stringify({ bundles }, null, 2);
+  const bundles: Record<string, unknown> = {};
+  for (const name of names) {
+    const entry = getCatalogBundle(name)!;
+    bundles[name] = {
+      vars: Object.keys(entry.vars),
+      ...(entry.ask ? { ask: entry.ask } : {}),
+      ...(entry.docs ? { docs: entry.docs } : {}),
+      ...(entry.prompt ? { prompt: entry.prompt } : {}),
+      ...(entry.run_example ? { run_example: entry.run_example } : {}),
+    };
   }
+  return { bundles };
+}
 
+function formatCatalogHuman(): string {
+  const names = listCatalogBundles();
   const lines = ["", "  ap catalog", ""];
   for (const name of names) {
     const entry = getCatalogBundle(name)!;
@@ -28,7 +31,10 @@ export function formatCatalogList(json: boolean): string | void {
   return lines.join("\n");
 }
 
-export function printCatalogList(json: boolean): void {
-  const output = formatCatalogList(json);
-  if (output) console.log(output);
+export function printCatalogList(format: OutputFormat): void {
+  if (format === "human") {
+    console.log(formatCatalogHuman());
+    return;
+  }
+  printMachineOutput(buildCatalogOutput());
 }
