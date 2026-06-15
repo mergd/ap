@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { listCatalogBundles, getCatalogBundle } from "./catalog/bundles.ts";
+import { listCatalogBundles, getCatalogBundle } from "./bundles.ts";
 
 export function formatCatalogList(json: boolean): string | void {
   const names = listCatalogBundles();
