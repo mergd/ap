@@ -78,16 +78,34 @@ async function seedFile(path: string, target: EditTarget): Promise<void> {
   await writeTextFile(path, "version = 1\n\nbundles = []\n");
 }
 
-function editorCommand(): string[] {
-  const cmd = process.env.VISUAL || process.env.EDITOR;
-  if (cmd) return cmd.split(/\s+/);
-  return ["nano"];
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
+function buildEditorShellCommand(path: string): string {
+  const editor = process.env.VISUAL || process.env.EDITOR;
+  const quoted = shellQuote(path);
+
+  if (!editor) return `nano ${quoted}`;
+
+  // code/cursor are often shell aliases — run via login shell (see openInEditor)
+  const needsWait = /^(code|cursor)(\s|$)/.test(editor) && !editor.includes("--wait");
+  return needsWait ? `${editor} --wait ${quoted}` : `${editor} ${quoted}`;
+}
+
+function shellInvokeArgs(command: string): [string, string[]] {
+  const shell = process.env.SHELL || "/bin/zsh";
+  const name = shell.split("/").pop() ?? "zsh";
+
+  // Aliases (e.g. code → cursor) need an interactive login shell
+  if (name === "fish") return [shell, ["-lc", command]];
+  return [shell, ["-lic", command]];
 }
 
 export async function openInEditor(path: string, target: EditTarget): Promise<number> {
   await seedFile(path, target);
-  const parts = editorCommand();
-  const proc = Bun.spawn([...parts, path], {
+  const [shell, args] = shellInvokeArgs(buildEditorShellCommand(path));
+  const proc = Bun.spawn([shell, ...args], {
     stdin: "inherit",
     stdout: "inherit",
     stderr: "inherit",

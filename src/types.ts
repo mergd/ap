@@ -1,6 +1,6 @@
-export type Visibility = "public" | "secret" | "derived";
+export type Visibility = "public" | "secret";
 export type Scope = "global" | "project";
-export type Storage = "global" | "project" | "inline" | "derived";
+export type Storage = "global" | "project" | "inline";
 export type VarStatus = "set" | "missing";
 
 export type DeriveKind = "public-ipv4";
@@ -59,7 +59,7 @@ export interface ResolvedBundle {
   ready: boolean;
   ask?: string;
   docs?: string;
-  /** Public + derived values surfaced in full for agents */
+  /** Public values surfaced in full for agents */
   surfaced: BundleSurfacedVar[];
   missing: BundleMissingVar[];
   secrets_set: string[];

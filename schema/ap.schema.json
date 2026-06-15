@@ -23,7 +23,7 @@
       "properties": {
         "visibility": {
           "type": "string",
-          "enum": ["public", "secret", "derived"],
+          "enum": ["public", "secret"],
           "default": "secret"
         },
         "scope": {
@@ -33,7 +33,7 @@
         },
         "value": {
           "type": "string",
-          "description": "Inline value (public visibility only)"
+          "description": "Static inline value (public visibility, mutually exclusive with derive)"
         },
         "ask": {
           "type": "string",
@@ -47,7 +47,7 @@
         "derive": {
           "type": "string",
           "enum": ["public-ipv4"],
-          "description": "Resolver for derived values"
+          "description": "Runtime resolver for public vars (mutually exclusive with value)"
         }
       },
       "additionalProperties": false

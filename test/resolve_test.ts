@@ -24,7 +24,7 @@ ask = "paste key"
 
 [var.NC_CLIENT_IP]
 scope = "global"
-visibility = "derived"
+visibility = "public"
 derive = "public-ipv4"
 `;
 
@@ -52,6 +52,15 @@ vars = ["NC_API_USER", "NC_API_KEY"]
 
   test("rejects invalid version", () => {
     expect(() => parseManifestContent("version = 2", "bad.toml")).toThrow("unsupported version");
+  });
+
+  test("rejects derived visibility", () => {
+    expect(() =>
+      parseManifestContent(
+        `version = 1\n[var.NC_CLIENT_IP]\nvisibility = "derived"\nderive = "public-ipv4"\n`,
+        "bad.toml",
+      ),
+    ).toThrow(/invalid visibility "derived"/);
   });
 });
 
@@ -137,6 +146,49 @@ describe("resolveVar", () => {
     const resolved = await resolveVar(ctx, def);
     expect(resolved.status).toBe("missing");
     expect(resolved.set_with).toBe("ap set NC_API_KEY --global");
+  });
+
+  test("reads inline secret from manifest", async () => {
+    const def: VarDefinition = {
+      key: "CF_GLOBAL_API_KEY",
+      visibility: "secret",
+      scope: "global",
+      value: "inline-key",
+    };
+
+    const ctx: ResolveContext = {
+      projectRoot: "/tmp/proj",
+      globalManifest: null,
+      projectManifest: null,
+      globalSecrets: {},
+      projectSecrets: {},
+    };
+
+    const resolved = await resolveVar(ctx, def, { includeSecrets: true });
+    expect(resolved.status).toBe("set");
+    expect(resolved.storage).toBe("inline");
+    expect(resolved.value).toBe("inline-key");
+  });
+
+  test("vault wins over inline secret", async () => {
+    const def: VarDefinition = {
+      key: "CF_GLOBAL_API_KEY",
+      visibility: "secret",
+      scope: "global",
+      value: "inline-key",
+    };
+
+    const ctx: ResolveContext = {
+      projectRoot: "/tmp/proj",
+      globalManifest: null,
+      projectManifest: null,
+      globalSecrets: { CF_GLOBAL_API_KEY: "vault-key" },
+      projectSecrets: {},
+    };
+
+    const resolved = await resolveVar(ctx, def, { includeSecrets: true });
+    expect(resolved.storage).toBe("global");
+    expect(resolved.value).toBe("vault-key");
   });
 });
 

@@ -16,7 +16,19 @@ function parseVarEntry(key: string, raw: unknown): VarDefinition {
   }
 
   const entry = raw as Record<string, unknown>;
-  const visibility = (entry.visibility as Visibility | undefined) ?? "secret";
+  const rawVisibility = entry.visibility;
+
+  let visibility: Visibility;
+  if (rawVisibility === undefined) {
+    visibility = "secret";
+  } else if (rawVisibility === "public" || rawVisibility === "secret") {
+    visibility = rawVisibility;
+  } else {
+    throw new Error(
+      `${key}: invalid visibility "${String(rawVisibility)}" (expected public or secret)`,
+    );
+  }
+
   const scope = entry.scope as Scope | undefined;
   const derive = entry.derive as DeriveKind | undefined;
 
@@ -24,8 +36,12 @@ function parseVarEntry(key: string, raw: unknown): VarDefinition {
     throw new Error(`${key}: public value must be a string`);
   }
 
-  if (derive && visibility !== "derived") {
-    throw new Error(`${key}: derive requires visibility = "derived"`);
+  if (derive && visibility !== "public") {
+    throw new Error(`${key}: derive requires visibility = "public"`);
+  }
+
+  if (derive && entry.value !== undefined) {
+    throw new Error(`${key}: use either value or derive, not both`);
   }
 
   return {
@@ -125,6 +141,42 @@ export async function loadManifest(path: string): Promise<Manifest | null> {
   }
 }
 
+export function serializeManifest(manifest: Manifest): string {
+  const lines: string[] = ["version = 1", ""];
+
+  if (manifest.activeBundles !== undefined) {
+    lines.push(`bundles = ${JSON.stringify(manifest.activeBundles)}`);
+    lines.push("");
+  }
+
+  const sortedBundles = [...manifest.bundles.entries()].sort(([a], [b]) => a.localeCompare(b));
+  for (const [name, bundle] of sortedBundles) {
+    lines.push(`[bundle.${name}]`);
+    if (bundle.ask) lines.push(`ask = ${JSON.stringify(bundle.ask)}`);
+    if (bundle.docs) lines.push(`docs = ${JSON.stringify(bundle.docs)}`);
+    lines.push(`vars = ${JSON.stringify(bundle.vars)}`);
+    lines.push("");
+  }
+
+  const sortedVars = [...manifest.vars.entries()].sort(([a], [b]) => a.localeCompare(b));
+  for (const [key, def] of sortedVars) {
+    lines.push(`[var.${key}]`);
+    lines.push(`visibility = "${def.visibility}"`);
+    if (def.scope) lines.push(`scope = "${def.scope}"`);
+    if (def.value !== undefined) lines.push(`value = ${JSON.stringify(def.value)}`);
+    if (def.ask) lines.push(`ask = ${JSON.stringify(def.ask)}`);
+    if (def.docs) lines.push(`docs = ${JSON.stringify(def.docs)}`);
+    if (def.derive) lines.push(`derive = "${def.derive}"`);
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
+
+export async function saveManifestContent(path: string, manifest: Manifest): Promise<void> {
+  await writeTextFile(path, serializeManifest(manifest));
+}
+
 export async function saveManifest(path: string, vars: Map<string, VarDefinition>): Promise<void> {
   const lines: string[] = ["version = 1", ""];
 
@@ -175,6 +227,6 @@ export const INIT_GLOBAL_MANIFEST = `version = 1
 # ask = "Namecheap Profile → Tools → API Access"
 #
 # [var.NC_CLIENT_IP]
-# visibility = "derived"
+# visibility = "public"
 # derive = "public-ipv4"
 `;

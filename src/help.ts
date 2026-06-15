@@ -4,7 +4,7 @@ const topics: Record<string, string> = {
   ap doctor [--json] [--bundle NAME]
 
   Checks bundles declared in ap.toml against ~/.config/ap.
-  Public/derived values appear in surfaced; secrets never shown in --json.
+  Public values appear in surfaced; secrets never shown in --json.
 
   Examples:
     ap doctor
@@ -58,7 +58,7 @@ const topics: Record<string, string> = {
   Resolves all bundles in ap.toml, merges env, spawns subprocess.
 
   Example:
-    ap run -- curl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" ...`,
+    ap run -- curl -H "Authorization: Bearer $CF_GLOBAL_API_TOKEN" ...`,
 
   set: `ap set — store a secret (stdin)
 
@@ -87,8 +87,9 @@ Usage:
   ap unset KEY [--global]          Remove from vault
   ap list [--json]                 List keys and status
   ap doctor [--json] [--bundle NAME]   Readiness by bundle
+  ap validate                      Check manifests (blocks inline secrets in git)
   ap schema [--json]               Merged manifest export
-  ap print KEY [--json]            Public/derived values only
+  ap print KEY [--json]            Public values only
   ap run -- <cmd...>               Resolve secrets, run command
 
   ap global init                   Scaffold ~/.config/ap/

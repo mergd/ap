@@ -28,6 +28,7 @@ import { getPathsInfo, openInEditor, printPaths, resolveEditPath, type EditTarge
 import { installSkill } from "./skill-install.ts";
 import { printHelp } from "./help.ts";
 import { ensureDir, pathExists, readTextFile, writeTextFile } from "./fs-helpers.ts";
+import { formatValidateReports, runValidate } from "./validate.ts";
 
 function usage(): void {
   printHelp();
@@ -211,6 +212,16 @@ async function cmdDoctor(json: boolean, globalOnly: boolean, bundleFilter?: stri
   }
 
   if (!result.ready) process.exit(1);
+}
+
+async function cmdValidate(): Promise<void> {
+  const projectRoot = await findProjectRoot();
+  const reports = await runValidate(projectRoot);
+  formatValidateReports(reports);
+
+  if (!reports.every((r) => r.ok)) {
+    process.exit(1);
+  }
 }
 
 async function cmdSchema(_json: boolean): Promise<void> {
@@ -419,6 +430,9 @@ async function main(): Promise<void> {
         break;
       case "doctor":
         await cmdDoctor(json, false, parseBundleFilter(args));
+        break;
+      case "validate":
+        await cmdValidate();
         break;
       case "schema":
         await cmdSchema(json);

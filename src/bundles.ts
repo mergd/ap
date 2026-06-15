@@ -99,7 +99,7 @@ export async function resolveBundles(
         continue;
       }
 
-      if (v.visibility === "public" || v.visibility === "derived") {
+      if (v.visibility === "public") {
         if (v.value !== undefined) surfaced.push({ key, value: v.value });
       } else {
         secrets_set.push(key);

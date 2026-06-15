@@ -26,7 +26,7 @@ ap init
 
 # Set secrets (never paste in chat)
 echo "$NC_API_KEY" | ap set NC_API_KEY --global
-echo "$CLOUDFLARE_API_TOKEN" | ap set CLOUDFLARE_API_TOKEN --global
+echo "$CF_GLOBAL_API_TOKEN" | ap set CF_GLOBAL_API_TOKEN --global
 
 # Check readiness
 ap doctor
@@ -53,7 +53,7 @@ ap skill install --project    # .cursor/skills/ap/ (this repo)
 | `ap.toml` | Which bundles this repo uses |
 | `.ap/secrets.json` | Project-only secrets (gitignored) |
 
-Public and derived values surface immediately in `ap doctor`. Secrets are never shown — only `set_with` commands.
+Public values surface immediately in `ap doctor`. Secrets are never shown — only `set_with` commands.
 
 ```bash
 ap paths    # show all file locations

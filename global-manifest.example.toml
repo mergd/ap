@@ -6,21 +6,22 @@ docs = "https://www.namecheap.com/support/api/intro/"
 vars = ["NC_API_USER", "NC_API_KEY", "NC_CLIENT_IP"]
 
 [bundle.cloudflare]
-ask = "Cloudflare dashboard → API Tokens → Pages Edit + Account Read"
-vars = ["CLOUDFLARE_API_TOKEN"]
+ask = "Cloudflare → My Profile → API Tokens → Global API Key, or create a token with account permissions."
+docs = "https://developers.cloudflare.com/fundamentals/api/get-started/create-token/"
+vars = ["CF_GLOBAL_API_TOKEN"]
 
 [var.NC_API_USER]
 visibility = "public"
-value = "UsysD3nN39n4Mi"
+value = "value"
 
 [var.NC_API_KEY]
 visibility = "secret"
 ask = "Namecheap Profile → Tools → API Access: paste key."
 
 [var.NC_CLIENT_IP]
-visibility = "derived"
+visibility = "public"
 derive = "public-ipv4"
 
-[var.CLOUDFLARE_API_TOKEN]
+[var.CF_GLOBAL_API_TOKEN]
 visibility = "secret"
-ask = "Cloudflare dashboard → API Tokens → Pages Edit + Account Read"
+ask = "Cloudflare → My Profile → API Tokens → Global API Key (or account-scoped API token)."

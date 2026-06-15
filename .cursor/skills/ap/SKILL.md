@@ -12,7 +12,7 @@ description: >-
 
 1. Run `ap doctor --json` (or `ap doctor --bundle namecheap --json` for one capability).
 2. Check `bundles` in the output — each bundle groups related secrets:
-   - `surfaced` — public/derived values available immediately (use these, don't ask)
+   - `surfaced` — public values available immediately (use these, don't ask)
    - `missing` — secrets the user must set via `set_with`
    - `secrets_set` — configured secrets (values never shown)
 3. If a bundle is not `ready`, show the user `ask` + `set_with` from `missing` entries.

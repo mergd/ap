@@ -81,8 +81,8 @@ export async function resolveVar(
   let value: string | undefined;
   let status: VarStatus = "missing";
 
-  if (def.visibility === "derived" && def.derive) {
-    storage = "derived";
+  if (def.visibility === "public" && def.derive) {
+    storage = "inline";
     try {
       value = await resolveDerive(def.derive);
       status = "set";
@@ -93,6 +93,22 @@ export async function resolveVar(
     storage = "inline";
     value = def.value;
     status = "set";
+  } else if (def.visibility === "secret") {
+    const vaultValue =
+      scope === "project" ? ctx.projectSecrets[def.key] : ctx.globalSecrets[def.key];
+
+    if (vaultValue !== undefined) {
+      storage = scope === "project" ? "project" : "global";
+      value = vaultValue;
+      status = "set";
+    } else if (def.value !== undefined) {
+      storage = "inline";
+      value = def.value;
+      status = "set";
+    } else {
+      storage = scope === "project" ? "project" : "global";
+      status = "missing";
+    }
   } else if (scope === "project") {
     storage = "project";
     value = ctx.projectSecrets[def.key];

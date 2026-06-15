@@ -34,7 +34,9 @@ export function projectManifestPath(projectRoot: string): string {
   return join(projectRoot, PROJECT_MANIFEST_NAME);
 }
 
-export async function findProjectRoot(start = process.cwd()): Promise<string | null> {
+export async function findProjectRoot(
+  start = process.cwd(),
+): Promise<string | null> {
   let dir = resolve(start);
   const root = resolve("/");
 
