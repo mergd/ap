@@ -142,6 +142,17 @@ export async function loadManifest(path: string): Promise<Manifest | null> {
   }
 }
 
+function serializeVarBlock(key: string, def: VarDefinition): string[] {
+  const lines: string[] = [`[var.${key}]`, `visibility = "${def.visibility}"`];
+  if (def.scope) lines.push(`scope = "${def.scope}"`);
+  if (def.value !== undefined) lines.push(`value = ${JSON.stringify(def.value)}`);
+  if (def.ask) lines.push(`ask = ${JSON.stringify(def.ask)}`);
+  if (def.docs) lines.push(`docs = ${JSON.stringify(def.docs)}`);
+  if (def.derive) lines.push(`derive = "${def.derive}"`);
+  lines.push("");
+  return lines;
+}
+
 export function serializeManifest(manifest: Manifest): string {
   const lines: string[] = ["version = 1", ""];
 
@@ -150,7 +161,9 @@ export function serializeManifest(manifest: Manifest): string {
     lines.push("");
   }
 
+  const claimedVars = new Set<string>();
   const sortedBundles = [...manifest.bundles.entries()].sort(([a], [b]) => a.localeCompare(b));
+
   for (const [name, bundle] of sortedBundles) {
     lines.push(`[bundle.${name}]`);
     if (bundle.ask) lines.push(`ask = ${JSON.stringify(bundle.ask)}`);
@@ -158,18 +171,21 @@ export function serializeManifest(manifest: Manifest): string {
     if (bundle.prompt) lines.push(`prompt = ${JSON.stringify(bundle.prompt)}`);
     lines.push(`vars = ${JSON.stringify(bundle.vars)}`);
     lines.push("");
+
+    for (const key of bundle.vars) {
+      const def = manifest.vars.get(key);
+      if (!def) continue;
+      claimedVars.add(key);
+      lines.push(...serializeVarBlock(key, def));
+    }
   }
 
-  const sortedVars = [...manifest.vars.entries()].sort(([a], [b]) => a.localeCompare(b));
-  for (const [key, def] of sortedVars) {
-    lines.push(`[var.${key}]`);
-    lines.push(`visibility = "${def.visibility}"`);
-    if (def.scope) lines.push(`scope = "${def.scope}"`);
-    if (def.value !== undefined) lines.push(`value = ${JSON.stringify(def.value)}`);
-    if (def.ask) lines.push(`ask = ${JSON.stringify(def.ask)}`);
-    if (def.docs) lines.push(`docs = ${JSON.stringify(def.docs)}`);
-    if (def.derive) lines.push(`derive = "${def.derive}"`);
-    lines.push("");
+  const orphanVars = [...manifest.vars.entries()]
+    .filter(([key]) => !claimedVars.has(key))
+    .sort(([a], [b]) => a.localeCompare(b));
+
+  for (const [key, def] of orphanVars) {
+    lines.push(...serializeVarBlock(key, def));
   }
 
   return lines.join("\n");
@@ -185,14 +201,7 @@ export async function saveManifest(path: string, vars: Map<string, VarDefinition
   const sorted = [...vars.entries()].sort(([a], [b]) => a.localeCompare(b));
 
   for (const [key, def] of sorted) {
-    lines.push(`[var.${key}]`);
-    lines.push(`visibility = "${def.visibility}"`);
-    if (def.scope) lines.push(`scope = "${def.scope}"`);
-    if (def.value !== undefined) lines.push(`value = ${JSON.stringify(def.value)}`);
-    if (def.ask) lines.push(`ask = ${JSON.stringify(def.ask)}`);
-    if (def.docs) lines.push(`docs = ${JSON.stringify(def.docs)}`);
-    if (def.derive) lines.push(`derive = "${def.derive}"`);
-    lines.push("");
+    lines.push(...serializeVarBlock(key, def));
   }
 
   await writeTextFile(path, lines.join("\n"));
@@ -204,25 +213,9 @@ export function emptyManifest(): Manifest {
 
 export const INIT_PROJECT_MANIFEST = `version = 1
 
-# Opt into capability bundles defined in ~/.config/ap/manifest.toml
+# Opt into bundles defined in ~/.config/ap/manifest.toml (from ap global init)
 bundles = []
 
 # Example:
-# bundles = ["namecheap", "cloudflare", "railway"]
-`;
-
-export const INIT_GLOBAL_MANIFEST = `version = 1
-
-# Bundle definitions live in the built-in catalog — ap catalog list
-# Put your values here (or use ap set KEY --global for secrets).
-
-# Example after enabling cloudflare in a project's ap.toml:
-#
-# [var.CF_GLOBAL_EMAIL]
-# visibility = "public"
-# value = "you@example.com"
-#
-# [var.CF_GLOBAL_API_KEY]
-# visibility = "secret"
-# ask is optional — catalog provides defaults
+# bundles = ["namecheap", "cloudflare"]
 `;

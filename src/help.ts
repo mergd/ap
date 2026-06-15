@@ -82,7 +82,9 @@ Usage:
   ap help [command]                Show help (this message or per-command)
 
   ap paths [--json]                Where manifests and secrets live
-  ap catalog list [--json]         Built-in bundle definitions (cloudflare, …)
+  ap global init [BUNDLE...]        Scaffold manifest from catalog (default: all)
+  ap catalog add [BUNDLE...]        Add catalog bundles to global manifest
+  ap catalog list [--json]         Available catalog bundles
   ap edit [target] [--global]      Open file in $EDITOR
   ap skill install [--project]     Install Cursor agent skill
 

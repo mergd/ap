@@ -4,10 +4,10 @@ import { join } from "node:path";
 import { runGlobalDoctor, runDoctor } from "./doctor.ts";
 import { printDoctor } from "./doctor-format.ts";
 import {
-  INIT_GLOBAL_MANIFEST,
   INIT_PROJECT_MANIFEST,
   loadManifest,
   saveManifest,
+  saveManifestContent,
   parseManifestContent,
 } from "./manifest.ts";
 import {
@@ -30,6 +30,7 @@ import { printHelp } from "./help.ts";
 import { ensureDir, pathExists, readTextFile, writeTextFile } from "./fs-helpers.ts";
 import { formatValidateReports, runValidate } from "./validate.ts";
 import { printCatalogList } from "./catalog/list.ts";
+import { buildManifestFromCatalog, mergeCatalogBundles } from "./catalog/scaffold.ts";
 
 function usage(): void {
   printHelp();
@@ -120,18 +121,45 @@ async function cmdInit(): Promise<void> {
   console.log(`Updated .gitignore with ${PROJECT_VAULT_DIR}/`);
 }
 
-async function cmdGlobalInit(): Promise<void> {
+async function cmdGlobalInit(bundleNames: string[]): Promise<void> {
   const home = globalHome();
   await ensureDir(home);
   const manifestPath = globalManifestPath();
 
   if (await pathExists(manifestPath)) {
-    console.error(`Error: ${manifestPath} already exists`);
+    console.error(`Error: ${manifestPath} already exists (use: ap catalog add)`);
     process.exit(1);
   }
 
-  await writeTextFile(manifestPath, INIT_GLOBAL_MANIFEST);
+  const manifest = buildManifestFromCatalog(bundleNames);
+  await saveManifestContent(manifestPath, manifest);
+  const names = [...manifest.bundles.keys()].join(", ");
   console.log(`Created ${manifestPath}`);
+  console.log(`Bundles: ${names}`);
+}
+
+async function cmdCatalogAdd(bundleNames: string[]): Promise<void> {
+  await ensureDir(globalHome());
+  const manifestPath = globalManifestPath();
+  const existing = await loadManifest(manifestPath);
+
+  if (!existing) {
+    const manifest = buildManifestFromCatalog(bundleNames);
+    await saveManifestContent(manifestPath, manifest);
+    console.log(`Created ${manifestPath}`);
+    console.log(`Bundles: ${[...manifest.bundles.keys()].join(", ")}`);
+    return;
+  }
+
+  const added = mergeCatalogBundles(existing, bundleNames);
+  await saveManifestContent(manifestPath, existing);
+
+  if (added.length > 0) {
+    console.log(`Added bundles: ${added.join(", ")}`);
+  } else {
+    console.log("All requested bundles already in manifest");
+  }
+  console.log(`Updated ${manifestPath}`);
 }
 
 async function cmdSet(key: string, global: boolean): Promise<void> {
@@ -354,11 +382,16 @@ async function main(): Promise<void> {
   try {
     if (positional[0] === "catalog") {
       const sub = positional[1];
+      const rest = stripFlags(positional.slice(2));
       if (sub === "list") {
         await cmdCatalogList(json);
         return;
       }
-      console.error("Unknown catalog command. Use: ap catalog list [--json]");
+      if (sub === "add") {
+        await cmdCatalogAdd(rest.filter((a) => !a.startsWith("--")));
+        return;
+      }
+      console.error("Unknown catalog command. Use: ap catalog list | ap catalog add [BUNDLE...]");
       process.exit(1);
     }
 
@@ -368,7 +401,7 @@ async function main(): Promise<void> {
 
       switch (sub) {
         case "init":
-          await cmdGlobalInit();
+          await cmdGlobalInit(rest.filter((a) => !a.startsWith("--")));
           break;
         case "set": {
           const key = rest[0];

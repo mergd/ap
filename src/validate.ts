@@ -1,4 +1,4 @@
-import { getCatalogBundle } from "./catalog/bundles.ts";
+import { isFileGitTracked } from "./git.ts";
 import {
   findProjectRoot,
   globalManifestPath,
@@ -41,7 +41,7 @@ export function validateVarRules(
 export async function validateManifest(
   manifest: Manifest,
   source: string,
-  options?: { requireBundleVarDefs?: boolean; gitTracked?: boolean },
+  options?: { requireBundleVarDefs?: boolean; gitTracked?: boolean; globalManifest?: Manifest | null },
 ): Promise<void> {
   const requireBundleVarDefs = options?.requireBundleVarDefs ?? false;
   const gitTracked = options?.gitTracked ?? (await isFileGitTracked(source));
@@ -68,9 +68,9 @@ export async function validateManifest(
 
   if (manifest.activeBundles) {
     for (const name of manifest.activeBundles) {
-      if (!manifest.bundles.has(name) && !getCatalogBundle(name)) {
+      if (!options?.globalManifest?.bundles.has(name)) {
         throw new Error(
-          `${source}: unknown bundle "${name}" in bundles = [...] — run: ap catalog list`,
+          `${source}: bundle "${name}" not in global manifest — run: ap catalog add ${name}`,
         );
       }
     }
@@ -102,7 +102,10 @@ async function validateManifestFile(
       return report;
     }
 
-    await validateManifest(manifest, path, options);
+    const globalManifest =
+      path.endsWith("ap.toml") ? await loadManifest(globalManifestPath()) : null;
+
+    await validateManifest(manifest, path, { ...options, globalManifest });
 
     const gitTracked = await isFileGitTracked(path);
     for (const [, def] of manifest.vars) {

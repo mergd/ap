@@ -9,7 +9,7 @@ import {
 } from "./paths.ts";
 import { loadManifest } from "./manifest.ts";
 import { createVaultStore } from "./vault.ts";
-import { collectBundleVarKeys, getActiveBundleNames, mergeBundleDefinition, findCatalogVarDefinition } from "./bundles.ts";
+import { collectBundleVarKeys, getActiveBundleNames, mergeBundleDefinition } from "./bundles.ts";
 import type {
   Manifest,
   ResolvedVar,
@@ -49,18 +49,17 @@ export function mergeDefinition(
   projectDef: VarDefinition | undefined,
   globalDef: VarDefinition | undefined,
   isProjectKey: boolean,
-  catalogDef?: VarDefinition,
 ): VarDefinition {
-  const scope = projectDef?.scope ?? globalDef?.scope ?? catalogDef?.scope ?? defaultScope(isProjectKey);
+  const scope = projectDef?.scope ?? globalDef?.scope ?? defaultScope(isProjectKey);
 
   return {
     key,
-    visibility: projectDef?.visibility ?? globalDef?.visibility ?? catalogDef?.visibility ?? "secret",
+    visibility: projectDef?.visibility ?? globalDef?.visibility ?? "secret",
     scope,
     value: projectDef?.value ?? globalDef?.value,
-    ask: projectDef?.ask ?? globalDef?.ask ?? catalogDef?.ask,
-    docs: projectDef?.docs ?? globalDef?.docs ?? catalogDef?.docs,
-    derive: projectDef?.derive ?? globalDef?.derive ?? catalogDef?.derive,
+    ask: projectDef?.ask ?? globalDef?.ask,
+    docs: projectDef?.docs ?? globalDef?.docs,
+    derive: projectDef?.derive ?? globalDef?.derive,
   };
 }
 
@@ -174,9 +173,7 @@ async function resolveKey(ctx: ResolveContext, key: string, options?: ResolveOpt
   const isProjectKey = !options?.globalOnly && (ctx.projectManifest?.vars.has(key) ?? false);
   const projectDef = isProjectKey ? ctx.projectManifest?.vars.get(key) : undefined;
   const globalDef = ctx.globalManifest?.vars.get(key);
-  const bundleNames = getActiveBundleNames(ctx, options?.globalOnly ?? false) ?? [];
-  const catalogDef = findCatalogVarDefinition(key, bundleNames);
-  const def = mergeDefinition(key, projectDef, globalDef, isProjectKey, catalogDef);
+  const def = mergeDefinition(key, projectDef, globalDef, isProjectKey);
   return await resolveVar(ctx, def, options);
 }
 
@@ -232,9 +229,7 @@ export function exportSchema(ctx: ResolveContext): Record<string, unknown> {
     const isProjectKey = ctx.projectManifest?.vars.has(key) ?? false;
     const projectDef = ctx.projectManifest?.vars.get(key);
     const globalDef = ctx.globalManifest?.vars.get(key);
-    const bundleNames = getActiveBundleNames(ctx, false) ?? [];
-    const catalogDef = findCatalogVarDefinition(key, bundleNames);
-    const def = mergeDefinition(key, projectDef, globalDef, isProjectKey, catalogDef);
+    const def = mergeDefinition(key, projectDef, globalDef, isProjectKey);
 
     vars[key] = {
       visibility: def.visibility,

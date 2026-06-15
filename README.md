@@ -4,21 +4,28 @@ Agent-portable local secrets. Declare **bundles** of credentials in committed ma
 
 ## Install
 
+Requires [Bun](https://bun.sh).
+
+```bash
+npm install -g @mergd/ap
+```
+
+Or from source:
+
 ```bash
 git clone https://github.com/mergd/ap.git
 cd ap
 bun install
-ln -sf "$(pwd)/bin/ap" ~/.local/bin/ap   # or add bin/ to PATH
+ln -sf "$(pwd)/bin/ap" ~/.local/bin/ap
 ```
-
-Requires [Bun](https://bun.sh).
 
 ## Quick start
 
 ```bash
 # One-time machine setup
-ap global init
-cp global-manifest.example.toml ~/.config/ap/manifest.toml
+ap global init                    # all catalog bundles → ~/.config/ap/manifest.toml
+# ap global init cloudflare         # or pick bundles
+# ap catalog add namecheap          # add more later (won't overwrite values)
 
 # Per repo
 ap init
@@ -26,7 +33,7 @@ ap init
 
 # Set secrets (never paste in chat)
 echo "$NC_API_KEY" | ap set NC_API_KEY --global
-echo "$CF_GLOBAL_API_TOKEN" | ap set CF_GLOBAL_API_TOKEN --global
+echo "$KEY" | ap set CF_GLOBAL_API_KEY --global
 
 # Check readiness
 ap doctor

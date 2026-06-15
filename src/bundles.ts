@@ -1,46 +1,28 @@
-import { catalogVarDefinition, getCatalogBundle, listCatalogBundles } from "./catalog/bundles.ts";
-import type { BundleDefinition, Manifest, ResolvedBundle, ResolvedVar, ResolveContext, ResolveOptions, VarDefinition } from "./types.ts";
-
-export { listCatalogBundles, getCatalogBundle };
+import type { BundleDefinition, Manifest, ResolvedBundle, ResolvedVar, ResolveContext, ResolveOptions } from "./types.ts";
 
 export function mergeBundleDefinition(
   name: string,
   projectManifest: Manifest | null,
   globalManifest: Manifest | null,
 ): BundleDefinition | undefined {
-  const catalog = getCatalogBundle(name);
   const project = projectManifest?.bundles.get(name);
   const global = globalManifest?.bundles.get(name);
 
-  if (!project && !global && !catalog) return undefined;
+  if (!project && !global) return undefined;
 
   return {
     name,
-    vars: project?.vars ?? global?.vars ?? Object.keys(catalog!.vars),
-    ask: project?.ask ?? global?.ask ?? catalog?.ask,
-    docs: project?.docs ?? global?.docs ?? catalog?.docs,
-    prompt: project?.prompt ?? global?.prompt ?? catalog?.prompt,
+    vars: project?.vars ?? global!.vars,
+    ask: project?.ask ?? global?.ask,
+    docs: project?.docs ?? global?.docs,
+    prompt: project?.prompt ?? global?.prompt,
   };
-}
-
-export function findCatalogVarDefinition(
-  key: string,
-  bundleNames: string[],
-): VarDefinition | undefined {
-  for (const name of bundleNames) {
-    const def = catalogVarDefinition(name, key);
-    if (def) return def;
-  }
-  return undefined;
 }
 
 export function getActiveBundleNames(ctx: ResolveContext, globalOnly: boolean): string[] | null {
   if (globalOnly) {
-    const names = new Set(listCatalogBundles());
-    if (ctx.globalManifest) {
-      for (const name of ctx.globalManifest.bundles.keys()) names.add(name);
-    }
-    return [...names].sort();
+    if (!ctx.globalManifest) return [];
+    return [...ctx.globalManifest.bundles.keys()].sort();
   }
 
   const active = ctx.projectManifest?.activeBundles;
@@ -89,7 +71,11 @@ export async function resolveBundles(
         name,
         ready: false,
         surfaced: [],
-        missing: [{ key: "(bundle)", ask: `Unknown bundle "${name}"`, set_with: "ap catalog list" }],
+        missing: [{
+          key: "(bundle)",
+          ask: `Bundle "${name}" not in ~/.config/ap/manifest.toml`,
+          set_with: `ap catalog add ${name}`,
+        }],
         secrets_set: [],
       };
       continue;

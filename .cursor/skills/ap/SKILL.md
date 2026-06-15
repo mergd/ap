@@ -29,13 +29,13 @@ ap run --bundle cloudflare -- sh -c 'curl -H "X-Auth-Email: $CF_GLOBAL_EMAIL" ..
 
 **Bundles** are named groups of env vars for HTTP/API workflows — not Cursor skills.
 
-Built-in bundles (`cloudflare`, `namecheap`) ship with the CLI — `prompt` + var defs come from the catalog; your manifest holds values only.
+Built-in bundles (`cloudflare`, `namecheap`) are catalog templates. `ap global init` or `ap catalog add` copies them into `~/.config/ap/manifest.toml` — that's the source of truth at runtime.
 
 ```bash
-ap catalog list --json
+ap catalog list
+ap global init cloudflare namecheap   # starter manifest
+ap catalog add cloudflare             # add to existing manifest
 ```
-
-Prefer an existing CLI login when one works well (e.g. `vercel login`, `gh auth login`). Catalog bundles are for API-key-only services.
 
 Project `ap.toml` opts in: `bundles = ["cloudflare"]`. Global `manifest.toml` holds your values only.
 

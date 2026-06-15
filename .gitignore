@@ -1,6 +1,7 @@
 node_modules/
 .ap/
 secrets.json
+.npmrc
 
 # OS / editor
 .DS_Store
