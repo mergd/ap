@@ -19,11 +19,11 @@ import {
   projectVaultDir,
   PROJECT_VAULT_DIR,
 } from "./paths.ts";
-import { exportSchema, loadResolveContext, resolveAll, resolveVar } from "./resolve.ts";
+import { loadResolveContext } from "./resolve.ts";
 import { runCommand } from "./run.ts";
 import { createVaultStore, readStdinSecret } from "./vault.ts";
-import type { Scope, VarDefinition } from "./types.ts";
-import { getPathsInfo, openInEditor, printPaths, resolveEditPath, type EditTarget } from "./edit.ts";
+import type { Scope } from "./types.ts";
+import { getPathsInfo, openInEditor, resolveEditPath, type EditTarget } from "./edit.ts";
 import { installSkill } from "./skill-install.ts";
 import { printHelp } from "./help.ts";
 import { ensureDir, pathExists, readTextFile, writeTextFile } from "./fs-helpers.ts";
@@ -41,6 +41,10 @@ function wantsJson(args: string[]): boolean {
 
 function stripFlags(args: string[]): string[] {
   const result = args.filter((a) => a !== "--json");
+  for (const flag of ["--global", "--validate", "--from-env", "--unset"]) {
+    const idx = result.indexOf(flag);
+    if (idx >= 0) result.splice(idx, 1);
+  }
   const bundleIdx = result.indexOf("--bundle");
   if (bundleIdx >= 0) result.splice(bundleIdx, 2);
   return result;
@@ -69,7 +73,7 @@ async function ensureVarInManifest(
     const path = globalManifestPath();
     const manifest = await loadManifest(path);
     if (!manifest) {
-      console.error("Error: global manifest not found. Run `ap global init` first.");
+      console.error("Error: global manifest not found. Run `ap init --global` first.");
       process.exit(1);
     }
     if (!manifest.vars.has(key)) {
@@ -92,7 +96,32 @@ async function ensureVarInManifest(
   }
 }
 
-async function cmdInit(): Promise<void> {
+async function cmdInit(global: boolean, bundleNames: string[]): Promise<void> {
+  if (global) {
+    await ensureDir(globalHome());
+    const manifestPath = globalManifestPath();
+    const existing = await loadManifest(manifestPath);
+
+    if (!existing) {
+      const manifest = buildManifestFromCatalog(bundleNames);
+      await saveManifestContent(manifestPath, manifest);
+      console.log(`Created ${manifestPath}`);
+      console.log(`Bundles: ${[...manifest.bundles.keys()].join(", ")}`);
+      return;
+    }
+
+    const added = mergeCatalogBundles(existing, bundleNames);
+    await saveManifestContent(manifestPath, existing);
+
+    if (added.length > 0) {
+      console.log(`Added bundles: ${added.join(", ")}`);
+    } else if (bundleNames.length > 0) {
+      console.log("All requested bundles already in manifest");
+    }
+    console.log(`Updated ${manifestPath}`);
+    return;
+  }
+
   const root = process.cwd();
   const manifestPath = projectManifestPath(root);
 
@@ -120,188 +149,70 @@ async function cmdInit(): Promise<void> {
   console.log(`Updated .gitignore with ${PROJECT_VAULT_DIR}/`);
 }
 
-async function cmdGlobalInit(bundleNames: string[]): Promise<void> {
-  const home = globalHome();
-  await ensureDir(home);
-  const manifestPath = globalManifestPath();
+async function cmdSet(
+  key: string,
+  options: { global: boolean; fromEnv: boolean; unset: boolean },
+): Promise<void> {
+  const scope: Scope = options.global ? "global" : "project";
+  const projectRoot = options.global ? null : await requireProjectRoot();
 
-  if (await pathExists(manifestPath)) {
-    console.error(`Error: ${manifestPath} already exists (use: ap catalog add)`);
-    process.exit(1);
-  }
-
-  const manifest = buildManifestFromCatalog(bundleNames);
-  await saveManifestContent(manifestPath, manifest);
-  const names = [...manifest.bundles.keys()].join(", ");
-  console.log(`Created ${manifestPath}`);
-  console.log(`Bundles: ${names}`);
-}
-
-async function cmdCatalogAdd(bundleNames: string[]): Promise<void> {
-  await ensureDir(globalHome());
-  const manifestPath = globalManifestPath();
-  const existing = await loadManifest(manifestPath);
-
-  if (!existing) {
-    const manifest = buildManifestFromCatalog(bundleNames);
-    await saveManifestContent(manifestPath, manifest);
-    console.log(`Created ${manifestPath}`);
-    console.log(`Bundles: ${[...manifest.bundles.keys()].join(", ")}`);
+  if (options.unset) {
+    const secretsPath = options.global
+      ? globalSecretsPath()
+      : projectSecretsPath(projectRoot!);
+    const vault = createVaultStore(secretsPath);
+    const removed = await vault.unset(key);
+    if (!removed) {
+      console.error(`Error: ${key} not in vault`);
+      process.exit(1);
+    }
+    console.log(`Unset ${key}`);
     return;
   }
 
-  const added = mergeCatalogBundles(existing, bundleNames);
-  await saveManifestContent(manifestPath, existing);
-
-  if (added.length > 0) {
-    console.log(`Added bundles: ${added.join(", ")}`);
-  } else {
-    console.log("All requested bundles already in manifest");
-  }
-  console.log(`Updated ${manifestPath}`);
-}
-
-async function cmdSet(key: string, global: boolean): Promise<void> {
-  const scope: Scope = global ? "global" : "project";
-  const projectRoot = global ? null : await requireProjectRoot();
   await ensureVarInManifest(key, scope, projectRoot);
 
-  const value = await readStdinSecret();
+  const value = options.fromEnv ? process.env[key] : await readStdinSecret();
   if (!value) {
-    console.error("Error: empty value (pipe secret via stdin)");
+    if (options.fromEnv) {
+      console.error(`Error: ${key} not set in environment`);
+    } else {
+      console.error("Error: empty value (pipe secret via stdin)");
+    }
     process.exit(1);
   }
 
-  const secretsPath = global ? globalSecretsPath() : projectSecretsPath(projectRoot!);
+  const secretsPath = options.global ? globalSecretsPath() : projectSecretsPath(projectRoot!);
   const vault = createVaultStore(secretsPath);
   await vault.set(key, value);
-  console.log(`Set ${key} (${scope})`);
+  console.log(`${options.fromEnv ? "Adopted" : "Set"} ${key} (${scope})`);
 }
 
-async function cmdGlobalSet(key: string): Promise<void> {
-  await cmdSet(key, true);
-}
-
-async function cmdAdopt(key: string, global: boolean): Promise<void> {
-  const value = process.env[key];
-  if (!value) {
-    console.error(`Error: ${key} not set in environment`);
-    process.exit(1);
-  }
-
-  const scope: Scope = global ? "global" : "project";
-  const projectRoot = global ? null : await requireProjectRoot();
-  await ensureVarInManifest(key, scope, projectRoot);
-
-  const secretsPath = global ? globalSecretsPath() : projectSecretsPath(projectRoot!);
-  const vault = createVaultStore(secretsPath);
-  await vault.set(key, value);
-  console.log(`Adopted ${key} (${scope})`);
-}
-
-async function cmdUnset(key: string, global: boolean): Promise<void> {
-  const secretsPath = global
-    ? globalSecretsPath()
-    : projectSecretsPath(await requireProjectRoot());
-  const vault = createVaultStore(secretsPath);
-  const removed = await vault.unset(key);
-  if (!removed) {
-    console.error(`Error: ${key} not in vault`);
-    process.exit(1);
-  }
-  console.log(`Unset ${key}`);
-}
-
-async function cmdList(json: boolean, globalOnly: boolean): Promise<void> {
+async function cmdDoctor(
+  json: boolean,
+  globalOnly: boolean,
+  validate: boolean,
+  bundleFilter?: string,
+): Promise<void> {
   const projectRoot = globalOnly ? null : await findProjectRoot();
-  const ctx = await loadResolveContext(projectRoot);
-  const vars = await resolveAll(ctx, { globalOnly, includeSecrets: false });
-
-  if (json) {
-    console.log(JSON.stringify({ vars }, null, 2));
-    return;
-  }
-
-  for (const v of vars) {
-    const status = v.status === "set" ? "set" : "missing";
-    console.log(`${v.key}\t${status}\t${v.scope}\t${v.visibility}`);
-  }
-}
-
-async function cmdDoctor(json: boolean, globalOnly: boolean, bundleFilter?: string): Promise<void> {
   const result = globalOnly
     ? await runGlobalDoctor(bundleFilter)
-    : await runDoctor(await findProjectRoot(), bundleFilter);
+    : await runDoctor(projectRoot, bundleFilter);
+
+  const validateReports = validate ? await runValidate(projectRoot) : undefined;
+  if (validateReports && !validateReports.every((r) => r.ok)) {
+    result.ready = false;
+  }
 
   if (json) {
-    console.log(JSON.stringify(result, null, 2));
+    const output = validateReports ? { ...result, validate: validateReports } : result;
+    console.log(JSON.stringify(output, null, 2));
   } else {
     printDoctor(result);
+    if (validateReports) formatValidateReports(validateReports, "validate");
   }
 
   if (!result.ready) process.exit(1);
-}
-
-async function cmdCatalogList(json: boolean): Promise<void> {
-  printCatalogList(json);
-}
-
-async function cmdValidate(): Promise<void> {
-  const projectRoot = await findProjectRoot();
-  const reports = await runValidate(projectRoot);
-  formatValidateReports(reports);
-
-  if (!reports.every((r) => r.ok)) {
-    process.exit(1);
-  }
-}
-
-async function cmdSchema(_json: boolean): Promise<void> {
-  const projectRoot = await findProjectRoot();
-  const ctx = await loadResolveContext(projectRoot);
-  const schema = exportSchema(ctx);
-  console.log(JSON.stringify(schema, null, 2));
-}
-
-async function cmdPrint(key: string, json: boolean): Promise<void> {
-  const projectRoot = await findProjectRoot();
-  const ctx = await loadResolveContext(projectRoot);
-
-  const projectDef = ctx.projectManifest?.vars.get(key);
-  const globalDef = ctx.globalManifest?.vars.get(key);
-  if (!projectDef && !globalDef) {
-    console.error(`Error: unknown key ${key}`);
-    process.exit(1);
-  }
-
-  const isProjectKey = ctx.projectManifest?.vars.has(key) ?? false;
-  const def: VarDefinition = {
-    key,
-    visibility: projectDef?.visibility ?? globalDef!.visibility,
-    scope: projectDef?.scope ?? globalDef?.scope ?? (isProjectKey ? "project" : "global"),
-    value: projectDef?.value ?? globalDef?.value,
-    ask: projectDef?.ask ?? globalDef?.ask,
-    docs: projectDef?.docs ?? globalDef?.docs,
-    derive: projectDef?.derive ?? globalDef?.derive,
-  };
-
-  const resolved = await resolveVar(ctx, def, { includeSecrets: true });
-
-  if (resolved.visibility === "secret") {
-    console.error(`Error: ${key} is a secret — use ap run instead`);
-    process.exit(1);
-  }
-
-  if (resolved.status === "missing") {
-    console.error(`Error: ${key} is missing`);
-    process.exit(1);
-  }
-
-  if (json) {
-    console.log(JSON.stringify({ key, value: resolved.value }, null, 2));
-  } else {
-    console.log(resolved.value);
-  }
 }
 
 async function cmdRun(cmd: string[], bundleFilter?: string): Promise<void> {
@@ -310,43 +221,38 @@ async function cmdRun(cmd: string[], bundleFilter?: string): Promise<void> {
     process.exit(1);
   }
 
-  const projectRoot = await requireProjectRoot();
-  const code = await runCommand(projectRoot, cmd, { bundleFilter });
+  const code = await runCommand(await findProjectRoot(), cmd, { bundleFilter });
   process.exit(code);
 }
 
-async function cmdPaths(json: boolean): Promise<void> {
-  printPaths(await getPathsInfo(), json);
-}
-
-function parseEditTarget(raw?: string): EditTarget {
-  if (!raw || raw === "secrets") return "secrets";
+function parseEditTarget(raw: string): EditTarget {
+  if (raw === "secrets") return "secrets";
   if (raw === "manifest") return "manifest";
-  if (raw === "ap" || raw === "ap.toml" || raw === "config") return "ap";
-  throw new Error(`Unknown edit target "${raw}" (use: secrets, manifest, ap)`);
+  if (raw === "toml") return "toml";
+  throw new Error(`Unknown edit target "${raw}" (use: secrets, manifest, toml)`);
 }
 
 async function cmdEdit(rest: string[]): Promise<void> {
   const global = rest.includes("--global");
-  const positional = rest.filter((a) => !a.startsWith("--"));
-  const raw = positional[0];
-  const target = parseEditTarget(raw ?? "secrets");
-
-  let useGlobal: boolean;
-  if (target === "ap") {
-    useGlobal = false;
-  } else if (global) {
-    useGlobal = true;
-  } else if (raw === undefined) {
-    useGlobal = true;
-  } else if (target === "manifest") {
-    useGlobal = true;
-  } else {
-    useGlobal = false;
+  const raw = rest.find((a) => !a.startsWith("--"));
+  if (!raw) {
+    console.error("Error: target required (secrets, manifest, toml)");
+    process.exit(1);
   }
 
-  const info = await getPathsInfo();
-  const path = resolveEditPath(target, useGlobal, info);
+  const target = parseEditTarget(raw);
+  if (target === "toml" && global) {
+    console.error("Error: toml is always project-scoped (omit --global)");
+    process.exit(1);
+  }
+
+  const useGlobal = target === "toml" ? false : target === "manifest" ? true : global;
+  if (target === "secrets" && !useGlobal && !(await findProjectRoot())) {
+    console.error("Error: no ap.toml found. Use --global or run `ap init` first.");
+    process.exit(1);
+  }
+
+  const path = resolveEditPath(target, useGlobal, await getPathsInfo());
 
   console.error(`Editing ${path}`);
   const code = await openInEditor(path, target);
@@ -381,54 +287,18 @@ async function main(): Promise<void> {
   try {
     if (positional[0] === "catalog") {
       const sub = positional[1];
-      const rest = stripFlags(positional.slice(2));
       if (sub === "list") {
-        await cmdCatalogList(json);
+        printCatalogList(json);
         return;
       }
-      if (sub === "add") {
-        await cmdCatalogAdd(rest.filter((a) => !a.startsWith("--")));
-        return;
-      }
-      console.error("Unknown catalog command. Use: ap catalog list | ap catalog add [BUNDLE...]");
+      console.error("Unknown catalog command. Use: ap catalog list");
       process.exit(1);
-    }
-
-    if (positional[0] === "global") {
-      const sub = positional[1];
-      const rest = stripFlags(positional.slice(2));
-
-      switch (sub) {
-        case "init":
-          await cmdGlobalInit(rest.filter((a) => !a.startsWith("--")));
-          break;
-        case "set": {
-          const key = rest[0];
-          if (!key) {
-            console.error("Error: KEY required");
-            process.exit(1);
-          }
-          await cmdGlobalSet(key);
-          break;
-        }
-        case "list":
-          await cmdList(json, true);
-          break;
-        case "doctor":
-          await cmdDoctor(json, true, parseBundleFilter(positional));
-          break;
-        default:
-          console.error(`Unknown global command: ${sub ?? "(none)"}`);
-          usage();
-          process.exit(1);
-      }
-      return;
     }
 
     if (positional[0] === "skill") {
       const sub = positional[1];
       if (sub === "install") {
-        await cmdSkillInstall(positional.includes("--project"));
+        await cmdSkillInstall(args.includes("--project"));
         return;
       }
       console.error("Unknown skill command. Use: ap skill install [--project]");
@@ -439,65 +309,32 @@ async function main(): Promise<void> {
     const rest = stripFlags(positional.slice(1));
 
     switch (cmd) {
-      case "init":
-        await cmdInit();
+      case "init": {
+        const global = args.includes("--global");
+        const bundleNames = rest.filter((a) => !a.startsWith("--"));
+        await cmdInit(global, bundleNames);
         break;
+      }
       case "set": {
         const key = rest.find((a) => !a.startsWith("--"));
-        const global = rest.includes("--global");
         if (!key) {
           console.error("Error: KEY required");
           process.exit(1);
         }
-        await cmdSet(key, global);
+        await cmdSet(key, {
+          global: args.includes("--global"),
+          fromEnv: args.includes("--from-env"),
+          unset: args.includes("--unset"),
+        });
         break;
       }
-      case "adopt": {
-        const key = rest.find((a) => !a.startsWith("--"));
-        const global = rest.includes("--global");
-        if (!key) {
-          console.error("Error: KEY required");
-          process.exit(1);
-        }
-        await cmdAdopt(key, global);
-        break;
-      }
-      case "unset": {
-        const key = rest.find((a) => !a.startsWith("--"));
-        const global = rest.includes("--global");
-        if (!key) {
-          console.error("Error: KEY required");
-          process.exit(1);
-        }
-        await cmdUnset(key, global);
-        break;
-      }
-      case "list":
-        await cmdList(json, false);
-        break;
       case "doctor":
-        await cmdDoctor(json, false, parseBundleFilter(args));
-        break;
-      case "validate":
-        await cmdValidate();
-        break;
-      case "schema":
-        await cmdSchema(json);
-        break;
-      case "print": {
-        const key = rest.find((a) => !a.startsWith("--"));
-        if (!key) {
-          console.error("Error: KEY required");
-          process.exit(1);
-        }
-        await cmdPrint(key, json);
-        break;
-      }
-      case "paths":
-        await cmdPaths(json);
-        break;
-      case "edit":
-        await cmdEdit(rest);
+        await cmdDoctor(
+          json,
+          args.includes("--global"),
+          args.includes("--validate"),
+          parseBundleFilter(args),
+        );
         break;
       case "run": {
         const dashIndex = args.indexOf("--");
@@ -505,6 +342,9 @@ async function main(): Promise<void> {
         await cmdRun(cmdArgs, parseBundleFilter(args));
         break;
       }
+      case "edit":
+        await cmdEdit(rest);
+        break;
       default:
         console.error(`Unknown command: ${cmd}`);
         usage();

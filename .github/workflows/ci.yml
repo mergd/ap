@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm install
+      - run: npm run check
+      - run: npm run build
+      - run: npm test
+
+  # Publishes to npm via OIDC trusted publishing (no NPM_TOKEN secret).
+  # One-time setup on npmjs.com → @mergd/ap → Trusted Publisher:
+  #   Provider: GitHub Actions
+  #   Repository: mergd/ap
+  #   Workflow: ci.yml
+  #   Environment: (leave empty)
+  publish:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - run: npm install
+      - run: npm run build
+
+      - name: Publish new version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "@mergd/ap@${VERSION}" version >/dev/null 2>&1; then
+            echo "Version ${VERSION} already on npm — skipping publish."
+            exit 0
+          fi
+          npm publish --provenance --access public

@@ -24,11 +24,10 @@ npm link   # or: ln -sf "$(pwd)/bin/ap" ~/.local/bin/ap
 
 ```bash
 # One-time machine setup
-ap global init                    # all catalog bundles → ~/.config/ap/manifest.toml
-# ap global init cloudflare         # or pick bundles
-# ap catalog add namecheap          # add more later (won't overwrite values)
+ap init --global                    # all catalog bundles → ~/.config/ap/manifest.toml
+# ap init --global cloudflare       # or pick bundles
 
-# Per repo
+# Per repo (optional — global fallback works without ap.toml)
 ap init
 # edit ap.toml → bundles = ["namecheap", "cloudflare"]
 
@@ -58,26 +57,25 @@ ap skill install --project    # .cursor/skills/ap/ (this repo)
 |------|---------|
 | `~/.config/ap/manifest.toml` | Global bundle definitions, public vars, ask text |
 | `~/.config/ap/secrets.json` | Global secret values |
-| `ap.toml` | Which bundles this repo uses |
+| `ap.toml` | Which bundles this repo uses (optional) |
 | `.ap/secrets.json` | Project-only secrets (gitignored) |
 
 Public values surface immediately in `ap doctor`. Secrets are never shown — only `set_with` commands.
 
 ```bash
-ap paths    # show all file locations
 ap help     # full command reference
 ```
 
 ## Commands
 
 ```
-ap doctor [--json] [--bundle NAME]   readiness check (agent entrypoint)
-ap set KEY [--global]                store secret via stdin
-ap adopt KEY [--global]              copy from process.env
-ap edit [secrets|manifest|ap]        open in $EDITOR
-ap run -- <cmd...>                   resolve secrets, run command
-ap skill install [--project]         install Cursor skill
-ap global init                       scaffold ~/.config/ap/
+ap doctor [--json] [--bundle NAME] [--global] [--validate]
+ap set KEY [--global] [--from-env] [--unset]
+ap run [--bundle NAME] -- <cmd...>
+ap init [--global] [BUNDLE...]
+ap catalog list
+ap edit <secrets|manifest|toml> [--global]
+ap skill install [--project]
 ```
 
 ## Development

@@ -1,7 +1,6 @@
 import { resolveDerive } from "./derives.ts";
 import { truncateForDisplay } from "./mask.ts";
 import {
-  globalHome,
   globalManifestPath,
   globalSecretsPath,
   projectManifestPath,
@@ -11,7 +10,6 @@ import { loadManifest } from "./manifest.ts";
 import { createVaultStore } from "./vault.ts";
 import { collectBundleVarKeys, getActiveBundleNames, mergeBundleDefinition } from "./bundles.ts";
 import type {
-  Manifest,
   ResolvedVar,
   ResolveContext,
   ResolveOptions,
@@ -199,8 +197,8 @@ export async function resolveForRun(
   ctx: ResolveContext,
   options?: Pick<ResolveOptions, "bundleFilter">,
 ): Promise<Record<string, string>> {
-  if (!ctx.projectRoot || !ctx.projectManifest) {
-    throw new Error("No project ap.toml found. Run from a project directory.");
+  if (!ctx.projectManifest && !ctx.globalManifest) {
+    throw new Error("No manifest found. Run `ap init --global` or `ap init`.");
   }
 
   const env: Record<string, string> = {};
@@ -218,50 +216,4 @@ export async function resolveForRun(
   }
 
   return env;
-}
-
-export function exportSchema(ctx: ResolveContext): Record<string, unknown> {
-  const vars: Record<string, unknown> = {};
-  const bundles: Record<string, unknown> = {};
-  const keys = collectKeys(ctx);
-
-  for (const key of keys) {
-    const isProjectKey = ctx.projectManifest?.vars.has(key) ?? false;
-    const projectDef = ctx.projectManifest?.vars.get(key);
-    const globalDef = ctx.globalManifest?.vars.get(key);
-    const def = mergeDefinition(key, projectDef, globalDef, isProjectKey);
-
-    vars[key] = {
-      visibility: def.visibility,
-      scope: def.scope ?? defaultScope(isProjectKey),
-      ...(def.ask ? { ask: def.ask } : {}),
-      ...(def.docs ? { docs: def.docs } : {}),
-      ...(def.derive ? { derive: def.derive } : {}),
-      ...(def.visibility === "public" && def.value ? { value: def.value } : {}),
-    };
-  }
-
-  const bundleNames = getActiveBundleNames(ctx, false) ??
-    (ctx.globalManifest ? [...ctx.globalManifest.bundles.keys()] : []);
-
-  for (const name of bundleNames) {
-    const b = mergeBundleDefinition(name, ctx.projectManifest, ctx.globalManifest);
-    if (b) {
-      bundles[name] = {
-        vars: b.vars,
-        ...(b.ask ? { ask: b.ask } : {}),
-        ...(b.docs ? { docs: b.docs } : {}),
-        ...(b.prompt ? { prompt: b.prompt } : {}),
-      };
-    }
-  }
-
-  return {
-    version: 1,
-    project: ctx.projectRoot,
-    global_home: globalHome(),
-    active_bundles: ctx.projectManifest?.activeBundles,
-    bundles,
-    vars,
-  };
 }

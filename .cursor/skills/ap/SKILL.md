@@ -29,15 +29,14 @@ ap run --bundle cloudflare -- sh -c 'curl -H "X-Auth-Email: $CF_GLOBAL_EMAIL" ..
 
 **Bundles** are named groups of env vars for HTTP/API workflows — not Cursor skills.
 
-Built-in bundles (`cloudflare`, `namecheap`) are catalog templates. `ap global init` or `ap catalog add` copies them into `~/.config/ap/manifest.toml` — that's the source of truth at runtime.
+Built-in bundles (`cloudflare`, `namecheap`) are catalog templates. `ap init --global` copies them into `~/.config/ap/manifest.toml` — that's the source of truth at runtime.
 
 ```bash
 ap catalog list
-ap global init cloudflare namecheap   # starter manifest
-ap catalog add cloudflare             # add to existing manifest
+ap init --global cloudflare namecheap   # create or merge into global manifest
 ```
 
-Project `ap.toml` opts in: `bundles = ["cloudflare"]`. Global `manifest.toml` holds your values only.
+Project `ap.toml` opts in: `bundles = ["cloudflare"]`. Without it, global bundles are used automatically.
 
 A Cursor skill references bundles in frontmatter:
 
@@ -50,20 +49,16 @@ That tells the agent to run `ap doctor --bundle namecheap --json` before calling
 
 ## Where files live
 
-```bash
-ap paths
-```
-
 | File | Purpose |
 |------|---------|
 | `~/.config/ap/manifest.toml` | Bundles, public vars, ask text |
 | `~/.config/ap/secrets.json` | **Secret values** (global) |
-| `ap.toml` | Which bundles this repo uses |
+| `ap.toml` | Which bundles this repo uses (optional) |
 | `.ap/secrets.json` | Project-only secret values |
 
 ```bash
 ap edit secrets --global   # edit secret values
-ap edit manifest --global  # edit bundles + public vars
-ap edit ap                 # edit project ap.toml
+ap edit manifest           # edit bundles + public vars
+ap edit toml               # edit project ap.toml
 ap skill install           # Cursor skill → ~/.cursor/skills/ap/
 ```

@@ -213,7 +213,7 @@ export function emptyManifest(): Manifest {
 
 export const INIT_PROJECT_MANIFEST = `version = 1
 
-# Opt into bundles defined in ~/.config/ap/manifest.toml (from ap global init)
+# Opt into bundles defined in ~/.config/ap/manifest.toml (from ap init --global)
 bundles = []
 
 # Example:

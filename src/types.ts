@@ -75,6 +75,15 @@ export interface DoctorResult {
   bundles: Record<string, ResolvedBundle>;
   /** Flat var list; omitted when filtering by --bundle */
   vars?: ResolvedVar[];
+  /** Present when invoked with --validate */
+  validate?: ValidateReport[];
+}
+
+export interface ValidateReport {
+  ok: boolean;
+  path: string;
+  errors: string[];
+  warnings: string[];
 }
 
 export interface ResolveContext {

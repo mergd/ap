@@ -235,6 +235,22 @@ ask = "paste key"
     }
   });
 
+  test("falls back to global bundles when no project ap.toml", async () => {
+    const ctx: ResolveContext = {
+      projectRoot: null,
+      globalManifest: parseManifestContent(`version = 1
+[bundle.cloudflare]
+vars = ["CF_GLOBAL_API_KEY"]
+`, "g"),
+      projectManifest: null,
+      globalSecrets: {},
+      projectSecrets: {},
+    };
+
+    const vars = await resolveAll(ctx);
+    expect(vars.map((v) => v.key)).toEqual(["CF_GLOBAL_API_KEY"]);
+  });
+
   test("resolveBundles reports missing secrets", async () => {
     const ctx: ResolveContext = {
       projectRoot: "/tmp",

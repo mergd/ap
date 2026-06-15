@@ -5,7 +5,7 @@ import {
   projectManifestPath,
 } from "./paths.ts";
 import { loadManifest } from "./manifest.ts";
-import type { Manifest, Visibility } from "./types.ts";
+import type { Manifest, ValidateReport, Visibility } from "./types.ts";
 
 export interface ValidateVarContext {
   /** When true, inline secret values are rejected. */
@@ -70,18 +70,11 @@ export async function validateManifest(
     for (const name of manifest.activeBundles) {
       if (!options?.globalManifest?.bundles.has(name)) {
         throw new Error(
-          `${source}: bundle "${name}" not in global manifest — run: ap catalog add ${name}`,
+          `${source}: bundle "${name}" not in global manifest — run: ap init --global ${name}`,
         );
       }
     }
   }
-}
-
-export interface ValidateReport {
-  ok: boolean;
-  path: string;
-  errors: string[];
-  warnings: string[];
 }
 
 async function validateManifestFile(
@@ -94,7 +87,7 @@ async function validateManifestFile(
     const manifest = await loadManifest(path);
     if (!manifest) {
       if (path === globalManifestPath()) {
-        report.warnings.push("not initialized — run: ap global init");
+        report.warnings.push("not initialized — run: ap init --global");
         return report;
       }
       report.ok = false;
@@ -138,9 +131,9 @@ export async function runValidate(projectRoot?: string | null): Promise<Validate
   return reports;
 }
 
-export function formatValidateReports(reports: ValidateReport[]): void {
+export function formatValidateReports(reports: ValidateReport[], heading = "validate"): void {
   console.log("");
-  console.log("  ap validate");
+  console.log(`  ${heading}`);
   console.log("");
 
   for (const r of reports) {

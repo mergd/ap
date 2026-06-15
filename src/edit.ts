@@ -32,7 +32,7 @@ export async function getPathsInfo(): Promise<ApPathsInfo> {
   };
 }
 
-export type EditTarget = "secrets" | "manifest" | "ap";
+export type EditTarget = "secrets" | "manifest" | "toml";
 
 export function resolveEditPath(
   target: EditTarget,
@@ -47,13 +47,8 @@ export function resolveEditPath(
       }
       return info.project_secrets;
     case "manifest":
-      if (global) return info.global_manifest;
-      if (!info.project_manifest) {
-        throw new Error("No project ap.toml found. Run `ap init` first.");
-      }
-      return info.project_manifest;
-    case "ap":
-      if (global) return info.global_manifest;
+      return info.global_manifest;
+    case "toml":
       if (!info.project_manifest) {
         throw new Error("No project ap.toml found. Run `ap init` first.");
       }
@@ -71,7 +66,7 @@ async function seedFile(path: string, target: EditTarget): Promise<void> {
     return;
   }
 
-  if (path.endsWith("manifest.toml")) {
+  if (target === "manifest") {
     await writeTextFile(path, "version = 1\n\n");
     return;
   }
@@ -97,7 +92,6 @@ function buildEditorShellCommand(path: string): string {
 
   if (!editor) return `nano ${quoted}`;
 
-  // Strip --wait if set; ap should not block on GUI editors
   const cmd = isDetachedEditor(editor) ? editor.replace(/\s+--wait\b/, "") : editor;
   return `${cmd} ${quoted}`;
 }
@@ -106,7 +100,6 @@ function shellInvokeArgs(command: string): [string, string[]] {
   const shell = process.env.SHELL || "/bin/zsh";
   const name = shell.split("/").pop() ?? "zsh";
 
-  // Aliases (e.g. code → cursor) need an interactive login shell
   if (name === "fish") return [shell, ["-lc", command]];
   return [shell, ["-lic", command]];
 }
@@ -141,32 +134,4 @@ export async function openInEditor(path: string, target: EditTarget): Promise<nu
     await chmod(path, 0o600);
   }
   return code;
-}
-
-export function printPaths(info: ApPathsInfo, json: boolean): void {
-  if (json) {
-    console.log(JSON.stringify(info, null, 2));
-    return;
-  }
-
-  console.log("");
-  console.log("  ap paths");
-  console.log("");
-  console.log("  Global (~/.config/ap/)");
-  console.log(`    manifest   ${info.global_manifest}   bundles + public vars`);
-  console.log(`    secrets    ${info.global_secrets}   secret values (edit here)`);
-  console.log("");
-  if (info.project) {
-    console.log(`  Project (${info.project})`);
-    console.log(`    ap.toml    ${info.project_manifest}   bundles this repo uses`);
-    console.log(`    secrets    ${info.project_secrets}   project-only secrets`);
-  } else {
-    console.log("  Project    (none — run from a repo with ap.toml)");
-  }
-  console.log("");
-  console.log("  Edit");
-  console.log("    ap edit secrets --global     secret values");
-  console.log("    ap edit manifest --global    bundles + public vars");
-  console.log("    ap edit ap                   project ap.toml");
-  console.log("");
 }

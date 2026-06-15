@@ -28,6 +28,10 @@ export function getActiveBundleNames(ctx: ResolveContext, globalOnly: boolean): 
   const active = ctx.projectManifest?.activeBundles;
   if (active !== undefined) return active;
 
+  if (ctx.globalManifest && ctx.globalManifest.bundles.size > 0) {
+    return [...ctx.globalManifest.bundles.keys()].sort();
+  }
+
   return null;
 }
 
@@ -43,8 +47,9 @@ export function collectBundleVarKeys(
     for (const key of bundle.vars) keys.add(key);
   }
 
-  if (ctx.projectManifest) {
-    for (const key of ctx.projectManifest.vars.keys()) keys.add(key);
+  const extraManifest = ctx.projectManifest ?? ctx.globalManifest;
+  if (extraManifest) {
+    for (const key of extraManifest.vars.keys()) keys.add(key);
   }
 
   return [...keys].sort();
@@ -74,7 +79,7 @@ export async function resolveBundles(
         missing: [{
           key: "(bundle)",
           ask: `Bundle "${name}" not in ~/.config/ap/manifest.toml`,
-          set_with: `ap catalog add ${name}`,
+          set_with: `ap init --global ${name}`,
         }],
         secrets_set: [],
       };

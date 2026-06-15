@@ -1,57 +1,27 @@
 const topics: Record<string, string> = {
   doctor: `ap doctor — readiness check (primary agent entrypoint)
 
-  ap doctor [--json] [--bundle NAME]
+  ap doctor [--json] [--bundle NAME] [--global] [--validate]
 
-  Checks bundles declared in ap.toml against ~/.config/ap.
-  Public values appear in surfaced; secrets never shown in --json.
+  Checks bundle readiness. Repo ap.toml first, then global fallback.
+  --validate also lints manifests (inline secrets in git, bundle refs).
 
   Examples:
     ap doctor
-    ap doctor --bundle namecheap
-    ap doctor --json`,
+    ap doctor --bundle namecheap --json
+    ap doctor --validate`,
 
   edit: `ap edit — open manifests or secrets in $EDITOR
 
-  ap edit [secrets|manifest|ap] [--global]
+  ap edit <secrets|manifest|toml> [--global]
 
-  Opens the file and returns immediately for GUI editors (cursor, code).
-  Terminal editors (vim, nano) block until you quit.
-
-  secrets   secret values (JSON key/value)
-  manifest  bundles + public vars (TOML)
-  ap        project ap.toml
+  secrets   secret values (JSON)
+  manifest  global bundles + public vars (TOML)
+  toml      project ap.toml
 
   Examples:
-    ap edit manifest --global
     ap edit secrets --global
-    ap edit ap`,
-
-  paths: `ap paths — show file locations
-
-  ap paths [--json]
-
-  Global:
-    ~/.config/ap/manifest.toml   bundles, public vars
-    ~/.config/ap/secrets.json    secret values
-
-  Project:
-    ap.toml                      active bundles
-    .ap/secrets.json             project secrets`,
-
-  skill: `ap skill — Cursor agent skill
-
-  ap skill install [--project]
-
-  --project   install to .cursor/skills/ap/ in current repo
-  (default)   install to ~/.cursor/skills/ap/ (all projects)`,
-
-  global: `ap global — machine-wide store (~/.config/ap/)
-
-  ap global init
-  ap global set KEY              stdin → secrets.json
-  ap global list [--json]
-  ap global doctor [--json]`,
+    ap edit toml`,
 
   run: `ap run — inject secrets and run a command
 
@@ -64,45 +34,54 @@ const topics: Record<string, string> = {
     ap run --bundle cloudflare -- sh -c \\
       'curl -sS -H "X-Auth-Email: $CF_GLOBAL_EMAIL" -H "X-Auth-Key: $CF_GLOBAL_API_KEY" https://api.cloudflare.com/client/v4/user'`,
 
-  set: `ap set — store a secret (stdin)
+  set: `ap set — store or remove a secret
 
-  ap set KEY [--global]
-  ap adopt KEY [--global]        copy from process.env
-  ap unset KEY [--global]
+  ap set KEY [--global]              stdin → vault
+  ap set KEY --from-env [--global]   copy from process.env
+  ap set KEY --unset [--global]      remove from vault
 
   Examples:
     echo "$KEY" | ap set NC_API_KEY --global
-    ap adopt NC_API_KEY --global`,
+    ap set NC_API_KEY --from-env --global`,
+
+  init: `ap init — scaffold project or global manifest
+
+  ap init [--global] [BUNDLE...]
+
+  Project: creates ap.toml + .ap/ (once).
+  Global: creates or merges catalog bundles into ~/.config/ap/manifest.toml.
+
+  Examples:
+    ap init --global cloudflare namecheap
+    ap init`,
+
+  skill: `ap skill — Cursor agent skill
+
+  ap skill install [--project]
+
+  --project   install to .cursor/skills/ap/ in current repo
+  (default)   install to ~/.cursor/skills/ap/ (all projects)`,
+
+  catalog: `ap catalog list — available bundle templates
+
+  ap catalog list [--json]
+
+  Templates copied into ~/.config/ap/manifest.toml via ap init --global.`,
 };
 
 function mainHelp(): string {
   return `ap — agent-portable secrets
 
 Usage:
-  ap help [command]                Show help (this message or per-command)
+  ap help [topic]                  Per-command help
 
-  ap paths [--json]                Where manifests and secrets live
-  ap global init [BUNDLE...]        Scaffold manifest from catalog (default: all)
-  ap catalog add [BUNDLE...]        Add catalog bundles to global manifest
+  ap init [--global] [BUNDLE...]   Scaffold project or global manifest
   ap catalog list [--json]         Available catalog bundles
-  ap edit [target] [--global]      Open file in $EDITOR
-  ap skill install [--project]     Install Cursor agent skill
-
-  ap init                          Scaffold ap.toml + .ap/
-  ap set KEY [--global]            Set secret (stdin)
-  ap adopt KEY [--global]          Copy from process.env
-  ap unset KEY [--global]          Remove from vault
-  ap list [--json]                 List keys and status
-  ap doctor [--json] [--bundle NAME]   Readiness by bundle
-  ap validate                      Check manifests (blocks inline secrets in git)
-  ap schema [--json]               Merged manifest export
-  ap print KEY [--json]            Public values only
-  ap run [--bundle NAME] -- <cmd...>   Resolve secrets, run command
-
-  ap global init                   Scaffold ~/.config/ap/
-  ap global set KEY                Machine-wide secret (stdin)
-  ap global list [--json]
-  ap global doctor [--json]
+  ap set KEY [--global] [--from-env] [--unset]
+  ap doctor [--json] [--bundle NAME] [--global] [--validate]
+  ap run [--bundle NAME] -- <cmd...>
+  ap edit <secrets|manifest|toml> [--global]
+  ap skill install [--project]
 
 Topics: ${Object.keys(topics).join(", ")}
   ap help doctor`;

@@ -2,7 +2,7 @@ import { loadResolveContext, resolveForRun } from "./resolve.ts";
 import { spawnAsync } from "./spawn.ts";
 
 export async function runCommand(
-  projectRoot: string,
+  projectRoot: string | null,
   cmd: string[],
   options?: { extraEnv?: Record<string, string>; bundleFilter?: string },
 ): Promise<number> {
