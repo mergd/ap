@@ -13,7 +13,7 @@
     "url": "https://github.com/mergd/ap/issues"
   },
   "bin": {
-    "ap": "./bin/ap"
+    "ap": "bin/ap"
   },
   "files": [
     "bin",
