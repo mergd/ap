@@ -1,0 +1,26 @@
+version = 1
+
+[bundle.namecheap]
+ask = "Namecheap API — enable API access, whitelist your IP, paste key."
+docs = "https://www.namecheap.com/support/api/intro/"
+vars = ["NC_API_USER", "NC_API_KEY", "NC_CLIENT_IP"]
+
+[bundle.cloudflare]
+ask = "Cloudflare dashboard → API Tokens → Pages Edit + Account Read"
+vars = ["CLOUDFLARE_API_TOKEN"]
+
+[var.NC_API_USER]
+visibility = "public"
+value = "UsysD3nN39n4Mi"
+
+[var.NC_API_KEY]
+visibility = "secret"
+ask = "Namecheap Profile → Tools → API Access: paste key."
+
+[var.NC_CLIENT_IP]
+visibility = "derived"
+derive = "public-ipv4"
+
+[var.CLOUDFLARE_API_TOKEN]
+visibility = "secret"
+ask = "Cloudflare dashboard → API Tokens → Pages Edit + Account Read"

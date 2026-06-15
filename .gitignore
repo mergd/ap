@@ -1,0 +1,14 @@
+node_modules/
+.ap/
+secrets.json
+
+# OS / editor
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Bun / build artifacts
+dist/
+*.tsbuildinfo

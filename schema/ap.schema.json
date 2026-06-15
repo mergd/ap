@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ap.dev/schema/ap.schema.json",
+  "title": "ap manifest",
+  "description": "Agent-portable secrets manifest (project ap.toml or global manifest.toml)",
+  "type": "object",
+  "required": ["version"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema version"
+    },
+    "bundles": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Project manifest: capability bundles this repo uses"
+    }
+  },
+  "patternProperties": {
+    "^var\\..+$": {
+      "type": "object",
+      "properties": {
+        "visibility": {
+          "type": "string",
+          "enum": ["public", "secret", "derived"],
+          "default": "secret"
+        },
+        "scope": {
+          "type": "string",
+          "enum": ["global", "project"],
+          "description": "Where the value is stored (project manifests only)"
+        },
+        "value": {
+          "type": "string",
+          "description": "Inline value (public visibility only)"
+        },
+        "ask": {
+          "type": "string",
+          "description": "Human/agent prompt when the secret is missing"
+        },
+        "docs": {
+          "type": "string",
+          "format": "uri",
+          "description": "Documentation URL for obtaining this credential"
+        },
+        "derive": {
+          "type": "string",
+          "enum": ["public-ipv4"],
+          "description": "Resolver for derived values"
+        }
+      },
+      "additionalProperties": false
+    },
+    "^bundle\\..+$": {
+      "type": "object",
+      "required": ["vars"],
+      "properties": {
+        "vars": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Env var keys in this capability bundle"
+        },
+        "ask": {
+          "type": "string",
+          "description": "Umbrella prompt when bundle secrets are missing"
+        },
+        "docs": {
+          "type": "string",
+          "format": "uri",
+          "description": "Documentation for setting up this bundle"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
