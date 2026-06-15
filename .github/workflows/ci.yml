@@ -24,12 +24,7 @@ jobs:
       - run: npm run build
       - run: npm test
 
-  # Publishes to npm via OIDC trusted publishing (no NPM_TOKEN secret).
-  # One-time setup on npmjs.com → @mergd/ap → Trusted Publisher:
-  #   Provider: GitHub Actions
-  #   Repository: mergd/ap
-  #   Workflow: ci.yml
-  #   Environment: (leave empty)
+  # OIDC trusted publishing requires npm 11.5.1+ (Node 22 ships npm 10).
   publish:
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -42,14 +37,16 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org
 
+      - run: npm install -g npm@latest
       - run: npm install
       - run: npm run build
 
       - name: Publish new version
         run: |
+          npm --version
           VERSION=$(node -p "require('./package.json').version")
           if npm view "@mergd/ap@${VERSION}" version >/dev/null 2>&1; then
             echo "Version ${VERSION} already on npm — skipping publish."
