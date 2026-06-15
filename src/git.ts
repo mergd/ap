@@ -1,14 +1,13 @@
 import { dirname, relative, resolve } from "node:path";
+import { spawnAsync } from "./spawn.ts";
 
 async function git(args: string[], cwd: string): Promise<{ code: number; stdout: string }> {
-  const proc = Bun.spawn(["git", ...args], {
+  return spawnAsync("git", args, {
     cwd,
+    stdin: "ignore",
     stdout: "pipe",
-    stderr: "pipe",
+    stderr: "ignore",
   });
-  const stdout = await new Response(proc.stdout).text();
-  const code = await proc.exited;
-  return { code, stdout: stdout.trim() };
 }
 
 /** True when `path` is tracked in the git repo that contains it. */

@@ -1,10 +1,11 @@
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { copyFile } from "node:fs/promises";
 import { ensureDir, pathExists } from "./fs-helpers.ts";
 import { findProjectRoot } from "./paths.ts";
 
 export function bundledSkillPath(): string {
-  return join(import.meta.dir, "..", ".cursor", "skills", "ap", "SKILL.md");
+  return join(dirname(fileURLToPath(import.meta.url)), "..", ".cursor", "skills", "ap", "SKILL.md");
 }
 
 export function globalSkillDir(): string {

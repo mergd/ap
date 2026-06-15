@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { describe, test } from "node:test";
+import { expect } from "./expect.ts";
 import { mergeBundleDefinition } from "../src/bundles.ts";
 import { buildManifestFromCatalog, mergeCatalogBundles } from "../src/catalog/scaffold.ts";
 import { emptyManifest, serializeManifest } from "../src/manifest.ts";

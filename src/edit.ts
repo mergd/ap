@@ -9,6 +9,7 @@ import {
   projectSecretsPath,
 } from "./paths.ts";
 import { ensureDir, pathExists, writeSecretFile, writeTextFile } from "./fs-helpers.ts";
+import { spawnAsync } from "./spawn.ts";
 
 export interface ApPathsInfo {
   global_home: string;
@@ -122,16 +123,20 @@ export async function openInEditor(path: string, target: EditTarget): Promise<nu
   const [shell, args] = shellInvokeArgs(buildEditorShellCommand(path));
 
   if (detached) {
-    Bun.spawn([shell, ...args], { stdin: "ignore", stdout: "ignore", stderr: "ignore" });
+    await spawnAsync(shell, args, {
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore",
+      detached: true,
+    });
     return 0;
   }
 
-  const proc = Bun.spawn([shell, ...args], {
+  const { code } = await spawnAsync(shell, args, {
     stdin: "inherit",
     stdout: "inherit",
     stderr: "inherit",
   });
-  const code = await proc.exited;
   if (code === 0 && target === "secrets" && process.platform !== "win32") {
     await chmod(path, 0o600);
   }

@@ -1,5 +1,3 @@
-#!/usr/bin/env bun
-
 import { listCatalogBundles, getCatalogBundle } from "./bundles.ts";
 
 export function formatCatalogList(json: boolean): string | void {

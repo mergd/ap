@@ -1,4 +1,3 @@
-#!/usr/bin/env bun
 
 import { join } from "node:path";
 import { runGlobalDoctor, runDoctor } from "./doctor.ts";

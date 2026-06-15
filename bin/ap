@@ -9,4 +9,11 @@ while [ -L "$SOURCE" ]; do
 done
 
 ROOT="$(cd "$(dirname "$SOURCE")/.." && pwd)"
-exec bun run "$ROOT/src/main.ts" "$@"
+CLI="$ROOT/dist/cli.js"
+
+if [ ! -f "$CLI" ]; then
+  echo "ap: missing build — run: npm run build" >&2
+  exit 1
+fi
+
+exec node "$CLI" "$@"

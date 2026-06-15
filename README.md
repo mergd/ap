@@ -4,19 +4,20 @@ Agent-portable local secrets. Declare **bundles** of credentials in committed ma
 
 ## Install
 
-Requires [Bun](https://bun.sh).
+Requires **Node 18+**.
 
 ```bash
 npm install -g @mergd/ap
 ```
 
-Or from source:
+From source:
 
 ```bash
 git clone https://github.com/mergd/ap.git
 cd ap
-bun install
-ln -sf "$(pwd)/bin/ap" ~/.local/bin/ap
+npm install
+npm run build
+npm link   # or: ln -sf "$(pwd)/bin/ap" ~/.local/bin/ap
 ```
 
 ## Quick start
@@ -82,9 +83,11 @@ ap global init                       scaffold ~/.config/ap/
 ## Development
 
 ```bash
-bun test
-bun run check
-bun run dev -- doctor --json
+npm install
+npm run build
+npm test
+npm run check
+npm run dev -- doctor --json
 ```
 
 ## License
