@@ -15,21 +15,29 @@ description: >-
    - `surfaced` — public values available immediately (use these, don't ask)
    - `missing` — secrets the user must set via `set_with`
    - `secrets_set` — configured secrets (values never shown)
+   - `prompt` — how to use the bundle when ready (auth shape, which vars)
 3. If a bundle is not `ready`, show the user `ask` + `set_with` from `missing` entries.
 4. Never request secret values in chat.
 
 ```bash
 echo "$KEY" | ap set NC_API_KEY --global
-ap doctor --bundle namecheap --json
-ap run -- curl ...
+ap doctor --bundle cloudflare --json
+ap run --bundle cloudflare -- sh -c 'curl -H "X-Auth-Email: $CF_GLOBAL_EMAIL" ...'
 ```
 
 ## Bundles vs Cursor skills
 
-**Bundles** in `ap.toml` are named groups of env vars for HTTP/API workflows — not Cursor skills.
+**Bundles** are named groups of env vars for HTTP/API workflows — not Cursor skills.
 
-- `namecheap`, `cloudflare` — REST API tokens injected via `ap run --`
-- **Not** for CLI login flows (`railway login`, `vercel login`) — those use interactive auth, not `ap` vault
+Built-in bundles (`cloudflare`, `namecheap`) ship with the CLI — `prompt` + var defs come from the catalog; your manifest holds values only.
+
+```bash
+ap catalog list --json
+```
+
+Prefer an existing CLI login when one works well (e.g. `vercel login`, `gh auth login`). Catalog bundles are for API-key-only services.
+
+Project `ap.toml` opts in: `bundles = ["cloudflare"]`. Global `manifest.toml` holds your values only.
 
 A Cursor skill references bundles in frontmatter:
 

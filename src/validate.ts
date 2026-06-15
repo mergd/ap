@@ -1,4 +1,4 @@
-import { isFileGitTracked } from "./git.ts";
+import { getCatalogBundle } from "./catalog/bundles.ts";
 import {
   findProjectRoot,
   globalManifestPath,
@@ -68,9 +68,9 @@ export async function validateManifest(
 
   if (manifest.activeBundles) {
     for (const name of manifest.activeBundles) {
-      if (!manifest.bundles.has(name)) {
+      if (!manifest.bundles.has(name) && !getCatalogBundle(name)) {
         throw new Error(
-          `${source}: unknown bundle "${name}" in bundles = [...] — define [bundle.${name}] in global manifest`,
+          `${source}: unknown bundle "${name}" in bundles = [...] — run: ap catalog list`,
         );
       }
     }

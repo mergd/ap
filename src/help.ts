@@ -15,14 +15,16 @@ const topics: Record<string, string> = {
 
   ap edit [secrets|manifest|ap] [--global]
 
+  Opens the file and returns immediately for GUI editors (cursor, code).
+  Terminal editors (vim, nano) block until you quit.
+
   secrets   secret values (JSON key/value)
   manifest  bundles + public vars (TOML)
   ap        project ap.toml
 
   Examples:
-    ap edit                      global secrets.json
-    ap edit secrets --global
     ap edit manifest --global
+    ap edit secrets --global
     ap edit ap`,
 
   paths: `ap paths — show file locations
@@ -53,12 +55,14 @@ const topics: Record<string, string> = {
 
   run: `ap run — inject secrets and run a command
 
-  ap run -- <cmd...>
+  ap run [--bundle NAME] -- <cmd...>
 
-  Resolves all bundles in ap.toml, merges env, spawns subprocess.
+  Resolves bundle vars, merges env, spawns subprocess.
+  Use sh -c when the command needs shell env expansion ($VAR in args).
 
-  Example:
-    ap run -- curl -H "Authorization: Bearer $CF_GLOBAL_API_TOKEN" ...`,
+  Examples:
+    ap run --bundle cloudflare -- sh -c \\
+      'curl -sS -H "X-Auth-Email: $CF_GLOBAL_EMAIL" -H "X-Auth-Key: $CF_GLOBAL_API_KEY" https://api.cloudflare.com/client/v4/user'`,
 
   set: `ap set — store a secret (stdin)
 
@@ -78,6 +82,7 @@ Usage:
   ap help [command]                Show help (this message or per-command)
 
   ap paths [--json]                Where manifests and secrets live
+  ap catalog list [--json]         Built-in bundle definitions (cloudflare, …)
   ap edit [target] [--global]      Open file in $EDITOR
   ap skill install [--project]     Install Cursor agent skill
 
@@ -90,7 +95,7 @@ Usage:
   ap validate                      Check manifests (blocks inline secrets in git)
   ap schema [--json]               Merged manifest export
   ap print KEY [--json]            Public values only
-  ap run -- <cmd...>               Resolve secrets, run command
+  ap run [--bundle NAME] -- <cmd...>   Resolve secrets, run command
 
   ap global init                   Scaffold ~/.config/ap/
   ap global set KEY                Machine-wide secret (stdin)

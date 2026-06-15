@@ -70,6 +70,10 @@
           "type": "string",
           "format": "uri",
           "description": "Documentation for setting up this bundle"
+        },
+        "prompt": {
+          "type": "string",
+          "description": "Agent instructions when using this bundle"
         }
       },
       "additionalProperties": false

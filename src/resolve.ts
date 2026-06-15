@@ -9,7 +9,7 @@ import {
 } from "./paths.ts";
 import { loadManifest } from "./manifest.ts";
 import { createVaultStore } from "./vault.ts";
-import { collectBundleVarKeys, getActiveBundleNames, mergeBundleDefinition } from "./bundles.ts";
+import { collectBundleVarKeys, getActiveBundleNames, mergeBundleDefinition, findCatalogVarDefinition } from "./bundles.ts";
 import type {
   Manifest,
   ResolvedVar,
@@ -49,17 +49,18 @@ export function mergeDefinition(
   projectDef: VarDefinition | undefined,
   globalDef: VarDefinition | undefined,
   isProjectKey: boolean,
+  catalogDef?: VarDefinition,
 ): VarDefinition {
-  const scope = projectDef?.scope ?? globalDef?.scope ?? defaultScope(isProjectKey);
+  const scope = projectDef?.scope ?? globalDef?.scope ?? catalogDef?.scope ?? defaultScope(isProjectKey);
 
   return {
     key,
-    visibility: projectDef?.visibility ?? globalDef?.visibility ?? "secret",
+    visibility: projectDef?.visibility ?? globalDef?.visibility ?? catalogDef?.visibility ?? "secret",
     scope,
     value: projectDef?.value ?? globalDef?.value,
-    ask: projectDef?.ask ?? globalDef?.ask,
-    docs: projectDef?.docs ?? globalDef?.docs,
-    derive: projectDef?.derive ?? globalDef?.derive,
+    ask: projectDef?.ask ?? globalDef?.ask ?? catalogDef?.ask,
+    docs: projectDef?.docs ?? globalDef?.docs ?? catalogDef?.docs,
+    derive: projectDef?.derive ?? globalDef?.derive ?? catalogDef?.derive,
   };
 }
 
@@ -173,7 +174,9 @@ async function resolveKey(ctx: ResolveContext, key: string, options?: ResolveOpt
   const isProjectKey = !options?.globalOnly && (ctx.projectManifest?.vars.has(key) ?? false);
   const projectDef = isProjectKey ? ctx.projectManifest?.vars.get(key) : undefined;
   const globalDef = ctx.globalManifest?.vars.get(key);
-  const def = mergeDefinition(key, projectDef, globalDef, isProjectKey);
+  const bundleNames = getActiveBundleNames(ctx, options?.globalOnly ?? false) ?? [];
+  const catalogDef = findCatalogVarDefinition(key, bundleNames);
+  const def = mergeDefinition(key, projectDef, globalDef, isProjectKey, catalogDef);
   return await resolveVar(ctx, def, options);
 }
 
@@ -195,13 +198,20 @@ export async function resolveAll(
   return Promise.all(keys.map((key) => resolveKey(ctx, key, options)));
 }
 
-export async function resolveForRun(ctx: ResolveContext): Promise<Record<string, string>> {
+export async function resolveForRun(
+  ctx: ResolveContext,
+  options?: Pick<ResolveOptions, "bundleFilter">,
+): Promise<Record<string, string>> {
   if (!ctx.projectRoot || !ctx.projectManifest) {
     throw new Error("No project ap.toml found. Run from a project directory.");
   }
 
   const env: Record<string, string> = {};
-  const vars = await resolveAll(ctx, { forRun: true, includeSecrets: true });
+  const vars = await resolveAll(ctx, {
+    forRun: true,
+    includeSecrets: true,
+    bundleFilter: options?.bundleFilter,
+  });
 
   for (const v of vars) {
     if (v.status === "missing") {
@@ -222,7 +232,9 @@ export function exportSchema(ctx: ResolveContext): Record<string, unknown> {
     const isProjectKey = ctx.projectManifest?.vars.has(key) ?? false;
     const projectDef = ctx.projectManifest?.vars.get(key);
     const globalDef = ctx.globalManifest?.vars.get(key);
-    const def = mergeDefinition(key, projectDef, globalDef, isProjectKey);
+    const bundleNames = getActiveBundleNames(ctx, false) ?? [];
+    const catalogDef = findCatalogVarDefinition(key, bundleNames);
+    const def = mergeDefinition(key, projectDef, globalDef, isProjectKey, catalogDef);
 
     vars[key] = {
       visibility: def.visibility,
@@ -238,12 +250,13 @@ export function exportSchema(ctx: ResolveContext): Record<string, unknown> {
     (ctx.globalManifest ? [...ctx.globalManifest.bundles.keys()] : []);
 
   for (const name of bundleNames) {
-    const b = ctx.projectManifest?.bundles.get(name) ?? ctx.globalManifest?.bundles.get(name);
+    const b = mergeBundleDefinition(name, ctx.projectManifest, ctx.globalManifest);
     if (b) {
       bundles[name] = {
         vars: b.vars,
         ...(b.ask ? { ask: b.ask } : {}),
         ...(b.docs ? { docs: b.docs } : {}),
+        ...(b.prompt ? { prompt: b.prompt } : {}),
       };
     }
   }

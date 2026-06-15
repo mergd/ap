@@ -75,6 +75,7 @@ function parseBundleEntry(name: string, raw: unknown): BundleDefinition {
     vars,
     ask: typeof entry.ask === "string" ? entry.ask : undefined,
     docs: typeof entry.docs === "string" ? entry.docs : undefined,
+    prompt: typeof entry.prompt === "string" ? entry.prompt : undefined,
   };
 }
 
@@ -154,6 +155,7 @@ export function serializeManifest(manifest: Manifest): string {
     lines.push(`[bundle.${name}]`);
     if (bundle.ask) lines.push(`ask = ${JSON.stringify(bundle.ask)}`);
     if (bundle.docs) lines.push(`docs = ${JSON.stringify(bundle.docs)}`);
+    if (bundle.prompt) lines.push(`prompt = ${JSON.stringify(bundle.prompt)}`);
     lines.push(`vars = ${JSON.stringify(bundle.vars)}`);
     lines.push("");
   }
@@ -211,22 +213,16 @@ bundles = []
 
 export const INIT_GLOBAL_MANIFEST = `version = 1
 
-# Define bundles + vars here. Projects opt in via bundles = ["namecheap", ...]
+# Bundle definitions live in the built-in catalog — ap catalog list
+# Put your values here (or use ap set KEY --global for secrets).
 
-# [bundle.namecheap]
-# ask = "Namecheap API — enable access, whitelist IP, paste key."
-# docs = "https://www.namecheap.com/support/api/intro/"
-# vars = ["NC_API_USER", "NC_API_KEY", "NC_CLIENT_IP"]
+# Example after enabling cloudflare in a project's ap.toml:
 #
-# [var.NC_API_USER]
+# [var.CF_GLOBAL_EMAIL]
 # visibility = "public"
-# value = "your-username"
+# value = "you@example.com"
 #
-# [var.NC_API_KEY]
+# [var.CF_GLOBAL_API_KEY]
 # visibility = "secret"
-# ask = "Namecheap Profile → Tools → API Access"
-#
-# [var.NC_CLIENT_IP]
-# visibility = "public"
-# derive = "public-ipv4"
+# ask is optional — catalog provides defaults
 `;

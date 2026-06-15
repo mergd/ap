@@ -82,15 +82,23 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
+/** GUI editors return immediately; terminal editors block until quit. */
+export function isDetachedEditor(editor: string | undefined): boolean {
+  if (!editor) return false;
+  const base = editor.trim().split(/\s+/)[0] ?? editor;
+  const name = base.split("/").pop() ?? base;
+  return /^(code|cursor|windsurf|open|subl|bbedit|mate)$/i.test(name);
+}
+
 function buildEditorShellCommand(path: string): string {
   const editor = process.env.VISUAL || process.env.EDITOR;
   const quoted = shellQuote(path);
 
   if (!editor) return `nano ${quoted}`;
 
-  // code/cursor are often shell aliases — run via login shell (see openInEditor)
-  const needsWait = /^(code|cursor)(\s|$)/.test(editor) && !editor.includes("--wait");
-  return needsWait ? `${editor} --wait ${quoted}` : `${editor} ${quoted}`;
+  // Strip --wait if set; ap should not block on GUI editors
+  const cmd = isDetachedEditor(editor) ? editor.replace(/\s+--wait\b/, "") : editor;
+  return `${cmd} ${quoted}`;
 }
 
 function shellInvokeArgs(command: string): [string, string[]] {
@@ -104,7 +112,20 @@ function shellInvokeArgs(command: string): [string, string[]] {
 
 export async function openInEditor(path: string, target: EditTarget): Promise<number> {
   await seedFile(path, target);
+
+  if (target === "secrets" && process.platform !== "win32" && (await pathExists(path))) {
+    await chmod(path, 0o600);
+  }
+
+  const editor = process.env.VISUAL || process.env.EDITOR;
+  const detached = isDetachedEditor(editor);
   const [shell, args] = shellInvokeArgs(buildEditorShellCommand(path));
+
+  if (detached) {
+    Bun.spawn([shell, ...args], { stdin: "ignore", stdout: "ignore", stderr: "ignore" });
+    return 0;
+  }
+
   const proc = Bun.spawn([shell, ...args], {
     stdin: "inherit",
     stdout: "inherit",

@@ -29,6 +29,7 @@ import { installSkill } from "./skill-install.ts";
 import { printHelp } from "./help.ts";
 import { ensureDir, pathExists, readTextFile, writeTextFile } from "./fs-helpers.ts";
 import { formatValidateReports, runValidate } from "./validate.ts";
+import { printCatalogList } from "./catalog/list.ts";
 
 function usage(): void {
   printHelp();
@@ -214,6 +215,10 @@ async function cmdDoctor(json: boolean, globalOnly: boolean, bundleFilter?: stri
   if (!result.ready) process.exit(1);
 }
 
+async function cmdCatalogList(json: boolean): Promise<void> {
+  printCatalogList(json);
+}
+
 async function cmdValidate(): Promise<void> {
   const projectRoot = await findProjectRoot();
   const reports = await runValidate(projectRoot);
@@ -272,14 +277,14 @@ async function cmdPrint(key: string, json: boolean): Promise<void> {
   }
 }
 
-async function cmdRun(cmd: string[]): Promise<void> {
+async function cmdRun(cmd: string[], bundleFilter?: string): Promise<void> {
   if (cmd.length === 0) {
     console.error("Error: no command specified (use: ap run -- <cmd>)");
     process.exit(1);
   }
 
   const projectRoot = await requireProjectRoot();
-  const code = await runCommand(projectRoot, cmd);
+  const code = await runCommand(projectRoot, cmd, { bundleFilter });
   process.exit(code);
 }
 
@@ -347,6 +352,16 @@ async function main(): Promise<void> {
   }
 
   try {
+    if (positional[0] === "catalog") {
+      const sub = positional[1];
+      if (sub === "list") {
+        await cmdCatalogList(json);
+        return;
+      }
+      console.error("Unknown catalog command. Use: ap catalog list [--json]");
+      process.exit(1);
+    }
+
     if (positional[0] === "global") {
       const sub = positional[1];
       const rest = stripFlags(positional.slice(2));
@@ -455,7 +470,7 @@ async function main(): Promise<void> {
       case "run": {
         const dashIndex = args.indexOf("--");
         const cmdArgs = dashIndex >= 0 ? args.slice(dashIndex + 1) : rest;
-        await cmdRun(cmdArgs);
+        await cmdRun(cmdArgs, parseBundleFilter(args));
         break;
       }
       default:

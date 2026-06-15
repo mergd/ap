@@ -20,6 +20,8 @@ export interface BundleDefinition {
   vars: string[];
   ask?: string;
   docs?: string;
+  /** Agent instructions when bundle is ready */
+  prompt?: string;
 }
 
 export interface Manifest {
@@ -59,6 +61,7 @@ export interface ResolvedBundle {
   ready: boolean;
   ask?: string;
   docs?: string;
+  prompt?: string;
   /** Public values surfaced in full for agents */
   surfaced: BundleSurfacedVar[];
   missing: BundleMissingVar[];

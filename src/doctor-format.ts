@@ -31,6 +31,13 @@ function formatBundle(bundle: ResolvedBundle): string[] {
     lines.push(`  ${dim(bundle.ask)}`);
   }
 
+  if (bundle.prompt && bundle.ready) {
+    lines.push(`  ${dim("prompt")}`);
+    for (const line of bundle.prompt.split("\n")) {
+      lines.push(`    ${dim(line)}`);
+    }
+  }
+
   if (bundle.surfaced.length > 0) {
     lines.push("");
     lines.push(`  ${dim("surfaced")}`);

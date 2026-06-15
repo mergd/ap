@@ -1,27 +1,20 @@
 version = 1
 
-[bundle.namecheap]
-ask = "Namecheap API — enable API access, whitelist your IP, paste key."
-docs = "https://www.namecheap.com/support/api/intro/"
-vars = ["NC_API_USER", "NC_API_KEY", "NC_CLIENT_IP"]
+# Values only — bundle shape + auth live in the ap catalog (ap catalog list).
+# Override with [bundle.NAME] or [var.KEY] in this file if needed.
 
-[bundle.cloudflare]
-ask = "Cloudflare → My Profile → API Tokens → Global API Key, or create a token with account permissions."
-docs = "https://developers.cloudflare.com/fundamentals/api/get-started/create-token/"
-vars = ["CF_GLOBAL_API_TOKEN"]
+[var.CF_GLOBAL_EMAIL]
+visibility = "public"
+value = "you@example.com"
+
+[var.CF_GLOBAL_API_KEY]
+visibility = "secret"
+# echo "$KEY" | ap set CF_GLOBAL_API_KEY --global
 
 [var.NC_API_USER]
 visibility = "public"
-value = "value"
+value = "your-username"
 
 [var.NC_API_KEY]
 visibility = "secret"
-ask = "Namecheap Profile → Tools → API Access: paste key."
-
-[var.NC_CLIENT_IP]
-visibility = "public"
-derive = "public-ipv4"
-
-[var.CF_GLOBAL_API_TOKEN]
-visibility = "secret"
-ask = "Cloudflare → My Profile → API Tokens → Global API Key (or account-scoped API token)."
+# echo "$KEY" | ap set NC_API_KEY --global
