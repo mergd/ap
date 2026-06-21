@@ -2,12 +2,27 @@ import { join } from "node:path";
 import { writeTextFile, ensureDir } from "./fs-helpers.ts";
 import { findProjectRoot } from "./paths.ts";
 
-export function globalSkillDir(): string {
-  return join(process.env.HOME ?? "", ".cursor", "skills", "ap");
+export type SkillTarget = "agents" | "claude";
+
+export interface SkillLocation {
+  target: SkillTarget;
+  dir: string;
 }
 
-export function projectSkillDir(projectRoot: string): string {
-  return join(projectRoot, ".cursor", "skills", "ap");
+export function skillDirs(scope: "global" | "project", projectRoot?: string): SkillLocation[] {
+  const home = process.env.HOME ?? "";
+  if (scope === "global") {
+    return [
+      { target: "agents", dir: join(home, ".agents", "skills", "ap") },
+      { target: "claude", dir: join(home, ".claude", "skills", "ap") },
+    ];
+  }
+
+  const root = projectRoot ?? process.cwd();
+  return [
+    { target: "agents", dir: join(root, ".agents", "skills", "ap") },
+    { target: "claude", dir: join(root, ".claude", "skills", "ap") },
+  ];
 }
 
 export function generateSkillMarkdown(): string {
@@ -22,17 +37,18 @@ Run \`ap guide\` for workflow. Never ask user to paste secrets.
 `;
 }
 
-export async function installSkill(scope: "global" | "project"): Promise<string> {
-  let destDir: string;
-  if (scope === "global") {
-    destDir = globalSkillDir();
-  } else {
-    const root = await findProjectRoot() ?? process.cwd();
-    destDir = projectSkillDir(root);
+export async function installSkill(scope: "global" | "project"): Promise<string[]> {
+  const projectRoot =
+    scope === "project" ? ((await findProjectRoot()) ?? process.cwd()) : undefined;
+  const content = generateSkillMarkdown();
+  const dests: string[] = [];
+
+  for (const { dir } of skillDirs(scope, projectRoot)) {
+    await ensureDir(dir);
+    const dest = join(dir, "SKILL.md");
+    await writeTextFile(dest, content);
+    dests.push(dest);
   }
 
-  await ensureDir(destDir);
-  const dest = join(destDir, "SKILL.md");
-  await writeTextFile(dest, generateSkillMarkdown());
-  return dest;
+  return dests;
 }

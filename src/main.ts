@@ -264,10 +264,13 @@ async function cmdEdit(rest: string[]): Promise<void> {
 
 async function cmdSkillInstall(project: boolean): Promise<void> {
   const scope = project ? "project" : "global";
-  const dest = await installSkill(scope);
-  console.log(`Installed skill → ${dest}`);
+  const dests = await installSkill(scope);
+  console.log(`Installed skill →`);
+  for (const dest of dests) {
+    console.log(`  ${dest}`);
+  }
   if (!project) {
-    console.log("Available in all Cursor projects (personal skill).");
+    console.log("Available in all projects (Cursor, Claude Code, Codex).");
   }
 }
 

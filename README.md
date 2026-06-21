@@ -42,11 +42,11 @@ ap doctor
 ap run -- curl ...
 ```
 
-Install the Cursor agent skill:
+Install the agent skill (Cursor, Claude Code, Codex):
 
 ```bash
-ap skill install              # ~/.cursor/skills/ap/ (all projects)
-ap skill install --project    # .cursor/skills/ap/ (this repo)
+ap skill install              # ~/.agents/skills/ap/, ~/.claude/skills/ap/
+ap skill install --project    # same paths under current repo
 ```
 
 ## How it works

@@ -59,7 +59,7 @@ const COMMANDS: CommandSpec[] = [
   },
   {
     name: "skill",
-    summary: "Install Cursor agent skill",
+    summary: "Install agent skill (Cursor, Claude Code, Codex)",
     subcommands: [
       {
         name: "install",

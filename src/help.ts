@@ -74,13 +74,14 @@ const topics: Record<string, string> = {
     ap init --global cloudflare namecheap
     ap init`,
 
-  skill: `ap skill — Cursor agent skill
+  skill: `ap skill — agent skill (Cursor, Claude Code, Codex)
 
   ap skill install [--project]
 
   Generates SKILL.md from ap guide (not a static copy).
-  --project   install to .cursor/skills/ap/ in current repo
-  (default)   install to ~/.cursor/skills/ap/ (all projects)`,
+  Installs to .agents/skills/ap/ and .claude/skills/ap/.
+  --project   install under current repo
+  (default)   install under home directory (all projects)`,
 
   catalog: `ap catalog list — available bundle templates
 

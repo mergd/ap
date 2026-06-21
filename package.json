@@ -19,7 +19,8 @@
     "bin",
     "dist",
     "schema",
-    ".cursor/skills/ap"
+    ".agents/skills/ap",
+    ".claude/skills/ap"
   ],
   "engines": {
     "node": ">=18"
