@@ -36,6 +36,14 @@ describe("catalog scaffold", () => {
     expect(bundle?.vars).toEqual(["CF_GLOBAL_API_KEY", "CF_GLOBAL_EMAIL"]);
   });
 
+  test("openrouter bundle documents response key path", () => {
+    const manifest = buildManifestFromCatalog(["openrouter"]);
+    expect(manifest.bundles.has("openrouter")).toBe(true);
+    expect(manifest.vars.has("OPENROUTER_MANAGEMENT_API_KEY")).toBe(true);
+    expect(manifest.bundles.get("openrouter")?.prompt).toContain(".key");
+    expect(manifest.bundles.get("openrouter")?.prompt).toContain("not .data.key");
+  });
+
   test("serializeManifest groups vars under their bundle", () => {
     const manifest = buildManifestFromCatalog(["cloudflare", "namecheap"]);
     const content = serializeManifest(manifest);

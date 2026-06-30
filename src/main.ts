@@ -21,7 +21,7 @@ import {
 import { runCommand } from "./run.ts";
 import { createVaultStore, readStdinSecret } from "./vault.ts";
 import type { Scope } from "./types.ts";
-import { getPathsInfo, openInEditor, resolveEditPath, type EditTarget } from "./edit.ts";
+import { getPathsInfo, openInEditor, resolveEditPath, resolveEditScope, type EditTarget } from "./edit.ts";
 import { installSkill } from "./skill-install.ts";
 import { printHelp } from "./help.ts";
 import { ensureDir, pathExists, readTextFile, writeTextFile } from "./fs-helpers.ts";
@@ -30,6 +30,7 @@ import { printCatalogList } from "./catalog/list.ts";
 import { buildManifestFromCatalog, mergeCatalogBundles } from "./catalog/scaffold.ts";
 import { printGuide } from "./guide.ts";
 import { printCommands } from "./commands.ts";
+import { formatSetupHuman, initEncryptionConfig, runEncryptionSetup } from "./encryption/setup.ts";
 import {
   doctorToAgentOutput,
   parseOutputFormat,
@@ -144,12 +145,27 @@ async function cmdInit(global: boolean, bundleNames: string[]): Promise<void> {
 
   if (!gitignore.includes(PROJECT_VAULT_DIR)) {
     const prefix = gitignore.length > 0 && !gitignore.endsWith("\n") ? "\n" : "";
-    await writeTextFile(gitignorePath, gitignore + `${prefix}${PROJECT_VAULT_DIR}/\n`);
+    await writeTextFile(
+      gitignorePath,
+      gitignore +
+        `${prefix}# ap — commit encrypted .ap/secrets.json after ap setup\n` +
+        `${PROJECT_VAULT_DIR}/local.toml\n` +
+        `${PROJECT_VAULT_DIR}/secrets.plain.json\n`,
+    );
   }
+
+  await initEncryptionConfig(root);
 
   console.log(`Created ${manifestPath}`);
   console.log(`Created ${projectVaultDir(root)}/`);
-  console.log(`Updated .gitignore with ${PROJECT_VAULT_DIR}/`);
+  console.log(`Updated .gitignore for encrypted secrets`);
+  console.log(`Next: eval "$(op signin)" && ap setup`);
+}
+
+async function cmdSetup(): Promise<void> {
+  const root = await requireProjectRoot();
+  const result = await runEncryptionSetup(root);
+  console.log(formatSetupHuman(result));
 }
 
 async function cmdSet(
@@ -163,7 +179,9 @@ async function cmdSet(
     const secretsPath = options.global
       ? globalSecretsPath()
       : projectSecretsPath(projectRoot!);
-    const vault = createVaultStore(secretsPath);
+    const vault = createVaultStore(secretsPath, {
+      projectRoot: options.global ? null : projectRoot,
+    });
     const removed = await vault.unset(key);
     if (!removed) {
       console.error(`Error: ${key} not in vault`);
@@ -186,7 +204,9 @@ async function cmdSet(
   }
 
   const secretsPath = options.global ? globalSecretsPath() : projectSecretsPath(projectRoot!);
-  const vault = createVaultStore(secretsPath);
+  const vault = createVaultStore(secretsPath, {
+    projectRoot: options.global ? null : projectRoot,
+  });
   await vault.set(key, value);
   console.log(`${options.fromEnv ? "Adopted" : "Set"} ${key} (${scope})`);
 }
@@ -235,8 +255,7 @@ function parseEditTarget(raw: string): EditTarget {
   throw new Error(`Unknown edit target "${raw}" (use: secrets, manifest, toml)`);
 }
 
-async function cmdEdit(rest: string[]): Promise<void> {
-  const global = rest.includes("--global");
+async function cmdEdit(rest: string[], globalFlag: boolean): Promise<void> {
   const raw = rest.find((a) => !a.startsWith("--"));
   if (!raw) {
     console.error("Error: target required (secrets, manifest, toml)");
@@ -244,21 +263,24 @@ async function cmdEdit(rest: string[]): Promise<void> {
   }
 
   const target = parseEditTarget(raw);
-  if (target === "toml" && global) {
-    console.error("Error: toml is always project-scoped (omit --global)");
+  const project = await findProjectRoot();
+  const scope = resolveEditScope(target, globalFlag, project !== null);
+
+  if (scope.error) {
+    console.error(`Error: ${scope.error}`);
     process.exit(1);
   }
 
-  const useGlobal = target === "toml" ? false : target === "manifest" ? true : global;
-  if (target === "secrets" && !useGlobal && !(await findProjectRoot())) {
-    console.error("Error: no ap.toml found. Use --global or run `ap init` first.");
-    process.exit(1);
+  if (scope.fallbackToGlobal) {
+    console.error("No project ap.toml; editing global secrets.");
   }
 
-  const path = resolveEditPath(target, useGlobal, await getPathsInfo());
+  const path = resolveEditPath(target, scope.useGlobal, await getPathsInfo());
 
   console.error(`Editing ${path}`);
-  const code = await openInEditor(path, target);
+  const code = await openInEditor(path, target, {
+    projectRoot: scope.useGlobal ? null : project,
+  });
   process.exit(code);
 }
 
@@ -361,7 +383,10 @@ async function main(): Promise<void> {
         break;
       }
       case "edit":
-        await cmdEdit(rest);
+        await cmdEdit(rest, args.includes("--global"));
+        break;
+      case "setup":
+        await cmdSetup();
         break;
       default:
         console.error(`Unknown command: ${cmd}`);

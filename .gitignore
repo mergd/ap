@@ -1,5 +1,6 @@
 node_modules/
-.ap/
+.ap/local.toml
+.ap/secrets.plain.json
 secrets.json
 .npmrc
 

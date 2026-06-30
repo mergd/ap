@@ -22,13 +22,18 @@ npm link   # or: ln -sf "$(pwd)/bin/ap" ~/.local/bin/ap
 
 ## Quick start
 
+Agents: run `ap guide` first (YAML contract for doctor → run → set).
+
 ```bash
 # One-time machine setup
 ap init --global                    # all catalog bundles → ~/.config/ap/manifest.toml
 # ap init --global cloudflare       # or pick bundles
+# ap init --global openrouter       # merge OpenRouter bundle into existing manifest
 
 # Per repo (optional — global fallback works without ap.toml)
 ap init
+eval "$(op signin)"
+ap setup                            # SOPS + 1Password — safe to commit .ap/secrets.json
 # edit ap.toml → bundles = ["namecheap", "cloudflare"]
 
 # Set secrets (never paste in chat)
@@ -45,7 +50,7 @@ ap run -- curl ...
 Install the agent skill (Cursor, Claude Code, Codex):
 
 ```bash
-ap skill install              # ~/.agents/skills/ap/, ~/.claude/skills/ap/
+ap skill install              # ~/.agents/skills/ap/, ~/.claude/skills/ap/, ~/.cursor/skills/ap/
 ap skill install --project    # same paths under current repo
 ```
 
@@ -58,25 +63,35 @@ ap skill install --project    # same paths under current repo
 | `~/.config/ap/manifest.toml` | Global bundle definitions, public vars, ask text |
 | `~/.config/ap/secrets.json` | Global secret values |
 | `ap.toml` | Which bundles this repo uses (optional) |
-| `.ap/secrets.json` | Project-only secrets (gitignored) |
+| `.ap/secrets.json` | Project secrets — SOPS-encrypted after `ap setup` (safe to commit) |
+| `.sops.yaml` | SOPS encryption rules (committed after `ap setup`) |
+| `.ap/config.toml` | 1Password vault/item for age key (committed) |
+
+Project secrets use **SOPS + age** with the private key in **1Password** (same pattern as [lockbox](https://github.com/mergd/lockbox)). Run `ap setup` once per repo; teammates need `op` access to decrypt.
 
 Public values surface immediately in `ap doctor`. Secrets are never shown — only `set_with` commands.
 
 ```bash
-ap help     # full command reference
+ap guide              # agent contract (YAML default; --human for prose)
+ap help               # full command reference
 ```
 
 ## Commands
 
 ```
-ap doctor [--json] [--bundle NAME] [--global] [--validate]
+ap guide [--human]               Agent contract (primary entrypoint for agents)
+ap doctor [--bundle NAME] [--global] [--human] [--validate]
 ap set KEY [--global] [--from-env] [--unset]
 ap run [--bundle NAME] -- <cmd...>
 ap init [--global] [BUNDLE...]
-ap catalog list
+ap setup
+ap catalog list [--human]
+ap commands [--human]
 ap edit <secrets|manifest|toml> [--global]
 ap skill install [--project]
 ```
+
+Machine output is YAML by default (`--human` for readable text). Catalog bundles: `cloudflare`, `namecheap`, `openrouter`.
 
 ## Development
 

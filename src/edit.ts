@@ -1,5 +1,7 @@
 import { chmod } from "node:fs/promises";
 import { dirname } from "node:path";
+import { loadEncryptionConfig } from "./encryption/config.ts";
+import { ensureEncryptedSecretsFile, isEncryptionReady, sopsEdit } from "./encryption/sops.ts";
 import {
   findProjectRoot,
   globalHome,
@@ -33,6 +35,32 @@ export async function getPathsInfo(): Promise<ApPathsInfo> {
 }
 
 export type EditTarget = "secrets" | "manifest" | "toml";
+
+export function resolveEditScope(
+  target: EditTarget,
+  globalFlag: boolean,
+  hasProject: boolean,
+): { useGlobal: boolean; fallbackToGlobal?: boolean; error?: string } {
+  if (target === "toml" && globalFlag) {
+    return { useGlobal: false, error: "toml is always project-scoped (omit --global)" };
+  }
+  if (target === "manifest") {
+    return { useGlobal: true };
+  }
+  if (target === "toml") {
+    if (!hasProject) {
+      return { useGlobal: false, error: "no ap.toml found. Run `ap init` first." };
+    }
+    return { useGlobal: false };
+  }
+  if (globalFlag || !hasProject) {
+    return {
+      useGlobal: true,
+      ...(!globalFlag && !hasProject ? { fallbackToGlobal: true as const } : {}),
+    };
+  }
+  return { useGlobal: false };
+}
 
 export function resolveEditPath(
   target: EditTarget,
@@ -104,8 +132,30 @@ function shellInvokeArgs(command: string): [string, string[]] {
   return [shell, ["-lic", command]];
 }
 
-export async function openInEditor(path: string, target: EditTarget): Promise<number> {
-  await seedFile(path, target);
+export async function openInEditor(
+  path: string,
+  target: EditTarget,
+  options?: { projectRoot?: string | null },
+): Promise<number> {
+  const encryptedSecrets =
+    target === "secrets" &&
+    options?.projectRoot &&
+    (await isEncryptionReady(options.projectRoot));
+
+  if (!encryptedSecrets) {
+    await seedFile(path, target);
+  }
+
+  if (encryptedSecrets) {
+    const config = await loadEncryptionConfig(options.projectRoot!);
+    if (!config) {
+      throw new Error("Encryption config missing — run: ap setup");
+    }
+    if (!(await pathExists(path))) {
+      await ensureEncryptedSecretsFile(path, config, options.projectRoot!);
+    }
+    return await sopsEdit(path, config, options.projectRoot!);
+  }
 
   if (target === "secrets" && process.platform !== "win32" && (await pathExists(path))) {
     await chmod(path, 0o600);

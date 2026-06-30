@@ -35,6 +35,11 @@ const COMMANDS: CommandSpec[] = [
     flags: ["--human"],
   },
   {
+    name: "setup",
+    summary: "Enable SOPS encryption for project secrets via 1Password",
+    usage: "ap setup",
+  },
+  {
     name: "init",
     summary: "Scaffold project or global manifest",
     flags: ["--global"],

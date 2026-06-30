@@ -1,10 +1,13 @@
 import { isFileGitTracked } from "./git.ts";
+import { isSopsEncrypted } from "./encryption/sops.ts";
 import {
   findProjectRoot,
   globalManifestPath,
   projectManifestPath,
+  projectSecretsPath,
 } from "./paths.ts";
 import { loadManifest } from "./manifest.ts";
+import { isNotFound, readTextFile } from "./fs-helpers.ts";
 import type { Manifest, ValidateReport, Visibility } from "./types.ts";
 
 export interface ValidateVarContext {
@@ -126,9 +129,34 @@ export async function runValidate(projectRoot?: string | null): Promise<Validate
   const root = projectRoot === undefined ? await findProjectRoot() : projectRoot;
   if (root) {
     reports.push(await validateManifestFile(projectManifestPath(root)));
+    reports.push(await validateProjectSecrets(root));
   }
 
   return reports;
+}
+
+async function validateProjectSecrets(projectRoot: string): Promise<ValidateReport> {
+  const path = projectSecretsPath(projectRoot);
+  const report: ValidateReport = { ok: true, path, errors: [], warnings: [] };
+
+  try {
+    const content = await readTextFile(path);
+    const tracked = await isFileGitTracked(path);
+
+    if (tracked && !isSopsEncrypted(content)) {
+      report.ok = false;
+      report.errors.push("plaintext secrets tracked in git — run: ap setup");
+    } else if (!tracked && !isSopsEncrypted(content)) {
+      report.warnings.push("plaintext secrets — run: ap setup to encrypt for git");
+    }
+  } catch (err) {
+    if (!isNotFound(err)) {
+      report.ok = false;
+      report.errors.push(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return report;
 }
 
 export function formatValidateReports(reports: ValidateReport[], heading = "validate"): void {

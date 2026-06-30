@@ -34,7 +34,7 @@ const topics: Record<string, string> = {
 
   ap edit <secrets|manifest|toml> [--global]
 
-  secrets   secret values (JSON)
+  secrets   secret values (JSON); falls back to global if no ap.toml
   manifest  global bundles + public vars (TOML)
   toml      project ap.toml
 
@@ -63,23 +63,40 @@ const topics: Record<string, string> = {
     echo "$KEY" | ap set NC_API_KEY --global
     ap set NC_API_KEY --from-env --global`,
 
+  setup: `ap setup — enable SOPS encryption via 1Password
+
+  ap setup
+
+  Syncs age key to 1Password, writes .sops.yaml, encrypts .ap/secrets.json.
+  Commit .sops.yaml, .ap/config.toml, and encrypted secrets to share safely.
+
+  Requires: op (1Password CLI), sops, age
+  Run first: eval "$(op signin)"
+
+  Examples:
+    ap init
+    ap setup
+    git add .sops.yaml .ap/`,
+
   init: `ap init — scaffold project or global manifest
 
   ap init [--global] [BUNDLE...]
 
   Project: creates ap.toml + .ap/ (once).
   Global: creates or merges catalog bundles into ~/.config/ap/manifest.toml.
+  After project init, run ap setup to encrypt secrets for git.
 
   Examples:
     ap init --global cloudflare namecheap
-    ap init`,
+    ap init
+    ap setup`,
 
   skill: `ap skill — agent skill (Cursor, Claude Code, Codex)
 
   ap skill install [--project]
 
   Generates SKILL.md from ap guide (not a static copy).
-  Installs to .agents/skills/ap/ and .claude/skills/ap/.
+  Installs to .agents/skills/ap/, .claude/skills/ap/, and .cursor/skills/ap/.
   --project   install under current repo
   (default)   install under home directory (all projects)`,
 
@@ -99,6 +116,7 @@ Usage:
   ap guide [--human]               Agent contract (YAML default)
   ap commands [--human]            Subcommand introspection
   ap init [--global] [BUNDLE...]   Scaffold project or global manifest
+  ap setup                         Encrypt project secrets (SOPS + 1Password)
   ap catalog list [--human]        Available catalog bundles
   ap set KEY [--global] [--from-env] [--unset]
   ap doctor [--human] [--bundle NAME] [--global] [--validate]

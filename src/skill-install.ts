@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { writeTextFile, ensureDir } from "./fs-helpers.ts";
 import { findProjectRoot } from "./paths.ts";
 
-export type SkillTarget = "agents" | "claude";
+export type SkillTarget = "agents" | "claude" | "cursor";
 
 export interface SkillLocation {
   target: SkillTarget;
@@ -15,6 +15,7 @@ export function skillDirs(scope: "global" | "project", projectRoot?: string): Sk
     return [
       { target: "agents", dir: join(home, ".agents", "skills", "ap") },
       { target: "claude", dir: join(home, ".claude", "skills", "ap") },
+      { target: "cursor", dir: join(home, ".cursor", "skills", "ap") },
     ];
   }
 
@@ -22,6 +23,7 @@ export function skillDirs(scope: "global" | "project", projectRoot?: string): Sk
   return [
     { target: "agents", dir: join(root, ".agents", "skills", "ap") },
     { target: "claude", dir: join(root, ".claude", "skills", "ap") },
+    { target: "cursor", dir: join(root, ".cursor", "skills", "ap") },
   ];
 }
 

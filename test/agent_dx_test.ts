@@ -126,14 +126,16 @@ describe("skill install generation", () => {
     expect(md.includes("## Before any external")).toBe(false);
   });
 
-  test("skillDirs covers agents and claude", () => {
+  test("skillDirs covers agents, claude, and cursor", () => {
     const project = skillDirs("project", "/repo");
-    expect(project.map((l) => l.target)).toEqual(["agents", "claude"]);
+    expect(project.map((l) => l.target)).toEqual(["agents", "claude", "cursor"]);
     expect(project[0]!.dir).toBe("/repo/.agents/skills/ap");
     expect(project[1]!.dir).toBe("/repo/.claude/skills/ap");
+    expect(project[2]!.dir).toBe("/repo/.cursor/skills/ap");
 
     const global = skillDirs("global");
     expect(global[0]!.dir.endsWith("/.agents/skills/ap")).toBe(true);
     expect(global[1]!.dir.endsWith("/.claude/skills/ap")).toBe(true);
+    expect(global[2]!.dir.endsWith("/.cursor/skills/ap")).toBe(true);
   });
 });

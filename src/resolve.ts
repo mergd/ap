@@ -27,7 +27,9 @@ export async function loadResolveContext(projectRoot?: string | null): Promise<R
   const globalManifest = await loadManifest(globalManifestPath());
   const projectManifest = root ? await loadManifest(projectManifestPath(root)) : null;
   const globalVault = createVaultStore(globalSecretsPath());
-  const projectVault = root ? createVaultStore(projectSecretsPath(root)) : null;
+  const projectVault = root
+    ? createVaultStore(projectSecretsPath(root), { projectRoot: root })
+    : null;
 
   return {
     projectRoot: root,

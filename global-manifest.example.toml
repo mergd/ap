@@ -35,3 +35,17 @@ ask = "Profile → Tools → API Access."
 visibility = "public"
 ask = "Whitelisted client IP (resolved at runtime)."
 derive = "public-ipv4"
+
+[bundle.openrouter]
+ask = "Management API key (provision keys) + usage API key."
+docs = "https://openrouter.ai/docs/guides/overview/auth/management-api-keys"
+prompt = "OPENROUTER_MANAGEMENT_API_KEY: admin only — create/list/delete keys at /api/v1/keys (not completions).\nOPENROUTER_API_KEY: usage key for model requests.\nCreate: POST https://openrouter.ai/api/v1/keys with Authorization: Bearer $OPENROUTER_MANAGEMENT_API_KEY.\nResponse: key string is at .key (top level), not .data.key. Store once: jq -r '.key' | ap set OPENROUTER_API_KEY --global.\nIf parsing fails, inspect the response — do not POST again (that creates duplicate keys)."
+vars = ["OPENROUTER_MANAGEMENT_API_KEY","OPENROUTER_API_KEY"]
+
+[var.OPENROUTER_MANAGEMENT_API_KEY]
+visibility = "secret"
+ask = "OpenRouter Settings → Management API Keys. Cannot call completions."
+
+[var.OPENROUTER_API_KEY]
+visibility = "secret"
+ask = "OpenRouter usage API key (or provision via management key)."

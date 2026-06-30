@@ -30,6 +30,22 @@ export function projectSecretsPath(projectRoot: string): string {
   return join(projectVaultDir(projectRoot), SECRETS_FILE);
 }
 
+export function projectConfigPath(projectRoot: string): string {
+  return join(projectVaultDir(projectRoot), "config.toml");
+}
+
+export function projectLocalConfigPath(projectRoot: string): string {
+  return join(projectVaultDir(projectRoot), "local.toml");
+}
+
+export function projectLocalConfigExamplePath(projectRoot: string): string {
+  return join(projectVaultDir(projectRoot), "local.toml.example");
+}
+
+export function projectSopsYamlPath(projectRoot: string): string {
+  return join(projectRoot, ".sops.yaml");
+}
+
 export function projectManifestPath(projectRoot: string): string {
   return join(projectRoot, PROJECT_MANIFEST_NAME);
 }
