@@ -92,6 +92,8 @@ ap skill install [--project]
 
 Output is human-readable in a terminal and YAML when piped. Catalog bundles: `cloudflare`, `namecheap`, `openrouter`.
 
+`ap` checks npm for updates at most once per day and prints upgrade notices to stderr. Set `AP_NO_UPDATE_CHECK=1` to disable the check.
+
 ## Development
 
 ```bash

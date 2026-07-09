@@ -36,6 +36,7 @@ import {
   showToAgentOutput,
   stripOutputFlags,
 } from "./agent-output.ts";
+import { checkForUpdate, formatUpdateNotice } from "./update-check.ts";
 
 function usage(): void {
   printHelp();
@@ -305,6 +306,9 @@ async function main(): Promise<void> {
 
   const format = parseOutputFormat(args);
   const positional = stripFlags(args);
+
+  const update = await checkForUpdate();
+  if (update) console.error(formatUpdateNotice(update));
 
   if (positional[0] === "help") {
     printHelp(positional[1]);
