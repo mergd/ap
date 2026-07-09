@@ -40,7 +40,8 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
-      - run: npm install -g npm@latest
+      # npm 11 supports OIDC trusted publishing; avoid unpinned major upgrades.
+      - run: npm install -g npm@11
       - run: npm install
       - run: npm run build
 
