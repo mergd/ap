@@ -1,120 +1,93 @@
 import { describe, test } from "node:test";
 import { expect } from "./expect.ts";
 import { buildAgentGuide, formatGuideHuman } from "../src/guide.ts";
-import { buildCommandsOutput } from "../src/commands.ts";
-import { doctorToAgentOutput, rejectRemovedFlags } from "../src/agent-output.ts";
+import { rejectRemovedFlags, showToAgentOutput } from "../src/agent-output.ts";
 import { yamlStringify } from "../src/yaml.ts";
 import { generateSkillMarkdown, skillDirs } from "../src/skill-install.ts";
-import type { DoctorResult, ResolvedBundle } from "../src/types.ts";
 
 describe("ap guide", () => {
   test("buildAgentGuide has required fields", () => {
     const guide = buildAgentGuide();
-    expect(guide.version).toBe(1);
+    expect(guide.version).toBe(2);
     expect(guide.workflow.length > 0).toBe(true);
     expect(guide.rules.never_request_secrets_in_chat).toBe(true);
-    expect(guide.commands.doctor).toContain("ap doctor");
+    expect(guide.commands.show).toContain("ap show");
     expect(guide.paths.global_manifest).toContain("manifest.toml");
   });
 
   test("formatGuideHuman stays succinct", () => {
     const lines = formatGuideHuman().split("\n");
     expect(lines.length).toBeLessThan(20);
-    expect(formatGuideHuman()).toContain("ap doctor --bundle");
+    expect(formatGuideHuman()).toContain("ap show <name> --check");
   });
 
   test("guide serializes to YAML without tables", () => {
     const yaml = yamlStringify(buildAgentGuide());
-    expect(yaml).toContain("version: 1");
+    expect(yaml).toContain("version: 2");
     expect(yaml).toContain("never_request_secrets_in_chat: true");
     expect(yaml.includes("| ---")).toBe(false);
   });
 });
 
-describe("ap commands", () => {
-  test("marks agent commands", () => {
-    const { commands } = buildCommandsOutput();
-    const agentNames = commands.filter((c) => c.agent).map((c) => c.name);
-    expect(agentNames).toContain("guide");
-    expect(agentNames).toContain("doctor");
-    expect(agentNames).toContain("run");
-    expect(agentNames).toContain("set");
-  });
-});
-
-describe("ap doctor YAML shape", () => {
-  const readyBundle: ResolvedBundle = {
-    name: "cloudflare",
-    ready: true,
-    prompt: "Auth: X-Auth-Email = CF_GLOBAL_EMAIL",
-    surfaced: [{ key: "CF_GLOBAL_EMAIL", value: "user@example.com" }],
-    missing: [],
-    secrets_set: ["CF_GLOBAL_API_KEY"],
-  };
-
-  const notReadyBundle: ResolvedBundle = {
-    name: "namecheap",
-    ready: false,
-    ask: "Enable API access, whitelist IP, paste key.",
-    surfaced: [],
-    missing: [
-      {
-        key: "NC_API_KEY",
-        ask: "Profile → Tools → API Access.",
-        set_with: "ap set NC_API_KEY --global",
-      },
-    ],
-    secrets_set: [],
-  };
-
-  test("ready bundle uses surfaced map and secrets array", () => {
-    const out = doctorToAgentOutput({
+describe("ap show YAML shape", () => {
+  test("includes bundles and unbundled secrets without values", () => {
+    const out = showToAgentOutput({
       ready: true,
-      project: null,
+      project: "/repo",
       global_home: "/home/.config/ap",
-      bundles: { cloudflare: readyBundle },
+      bundles: {
+        cloudflare: {
+          name: "cloudflare",
+          ready: true,
+          surfaced: [{ key: "CF_EMAIL", value: "user@example.com" }],
+          missing: [],
+          secrets_set: ["CF_KEY"],
+        },
+      },
+      vars: [
+        { key: "CF_EMAIL", scope: "global", storage: "inline", visibility: "public", status: "set", value: "user@example.com" },
+        { key: "CF_KEY", scope: "global", storage: "global", visibility: "secret", status: "set", masked: true },
+        { key: "OTHER_TOKEN", scope: "global", storage: "global", visibility: "secret", status: "set", value: "must-not-show" },
+        { key: "MISSING_TOKEN", scope: "global", storage: "global", visibility: "secret", status: "missing", set_with: "ap set MISSING_TOKEN --global" },
+      ],
     });
 
-    expect(out.bundles!.cloudflare.ready).toBe(true);
-    expect(out.bundles!.cloudflare.surfaced!.CF_GLOBAL_EMAIL).toBe("user@example.com");
-    expect(out.bundles!.cloudflare.secrets).toEqual(["CF_GLOBAL_API_KEY"]);
-    expect(out.bundles!.cloudflare.prompt).toContain("Auth:");
-    expect(out.bundles!.cloudflare.missing).toBeUndefined();
+    expect(out.bundles!.cloudflare.secrets).toEqual(["CF_KEY"]);
+    expect(out.unbundled_secrets!.OTHER_TOKEN).toEqual({ status: "set" });
+    expect(out.unbundled_secrets!.MISSING_TOKEN).toEqual({
+      status: "missing",
+      set_with: "ap set MISSING_TOKEN --global",
+    });
+    expect(JSON.stringify(out).includes("must-not-show")).toBe(false);
   });
 
-  test("not ready bundle includes next and missing", () => {
-    const out = doctorToAgentOutput({
+  test("includes the next action for a missing bundle secret", () => {
+    const out = showToAgentOutput({
       ready: false,
       project: null,
       global_home: "/home/.config/ap",
-      bundles: { namecheap: notReadyBundle },
+      bundles: {
+        namecheap: {
+          name: "namecheap",
+          ready: false,
+          surfaced: [],
+          secrets_set: [],
+          missing: [{ key: "NC_API_KEY", set_with: "ap set NC_API_KEY --global" }],
+        },
+      },
     });
 
     expect(out.bundles!.namecheap.next).toBe("ap set NC_API_KEY --global");
     expect(out.bundles!.namecheap.missing![0]!.key).toBe("NC_API_KEY");
-    expect(out.bundles!.namecheap.prompt).toBeUndefined();
-  });
-
-  test("YAML omits empty fields", () => {
-    const yaml = yamlStringify(
-      doctorToAgentOutput({
-        ready: true,
-        project: null,
-        global_home: "/home/.config/ap",
-        bundles: { cloudflare: readyBundle },
-      }),
-    );
-    expect(yaml.includes("missing:")).toBe(false);
-    expect(yaml).toContain("surfaced:");
-    expect(yaml).toContain("secrets:");
   });
 });
 
 describe("removed flags", () => {
   test("rejectRemovedFlags errors on --yaml and --json", () => {
-    expect(() => rejectRemovedFlags(["doctor", "--yaml"])).toThrow("--yaml");
-    expect(() => rejectRemovedFlags(["doctor", "--json"])).toThrow("--json");
-    expect(() => rejectRemovedFlags(["doctor", "--human"])).not.toThrow();
+    expect(() => rejectRemovedFlags(["show", "--yaml"])).toThrow("--yaml");
+    expect(() => rejectRemovedFlags(["show", "--json"])).toThrow("--json");
+    expect(() => rejectRemovedFlags(["show", "--human"])).not.toThrow();
+    expect(() => rejectRemovedFlags(["set", "KEY", "--unset"])).toThrow("ap unset KEY");
   });
 });
 

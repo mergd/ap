@@ -1,16 +1,19 @@
-import type { DoctorResult, ResolvedBundle, ResolvedVar } from "./types.ts";
+import type { DoctorResult, ResolvedBundle } from "./types.ts";
 import { yamlStringify } from "./yaml.ts";
 
 export type OutputFormat = "human" | "yaml";
 
 export function parseOutputFormat(args: string[]): OutputFormat {
   if (args.includes("--human")) return "human";
-  return "yaml";
+  return process.stdout.isTTY ? "human" : "yaml";
 }
 
 const REMOVED_FLAGS = ["--yaml", "--json"] as const;
 
 export function rejectRemovedFlags(args: string[]): void {
+  if (args.includes("--unset")) {
+    throw new Error("unknown flag --unset (use: ap unset KEY [--global])");
+  }
   for (const flag of REMOVED_FLAGS) {
     if (args.includes(flag)) {
       throw new Error(`unknown flag ${flag} (YAML is default; use --human for pretty output)`);
@@ -36,12 +39,15 @@ export interface AgentBundleOutput {
   next?: string;
 }
 
-export interface AgentDoctorOutput {
-  ready: boolean;
+export interface AgentShowOutput {
   bundles?: Record<string, AgentBundleOutput>;
-  project?: string | null;
-  global_home?: string;
-  vars?: Record<string, { status: "set" | "missing" | "surfaced"; value?: string; ask?: string; set_with?: string }>;
+  unbundled_secrets?: Record<string, {
+    status: "set" | "missing";
+    ask?: string;
+    set_with?: string;
+  }>;
+  project: string | null;
+  global_home: string;
   validate?: DoctorResult["validate"];
 }
 
@@ -70,40 +76,43 @@ function bundleToAgentOutput(bundle: ResolvedBundle): AgentBundleOutput {
   return out;
 }
 
-function varToAgentEntry(v: ResolvedVar): {
-  status: "set" | "missing" | "surfaced";
-  value?: string;
-  ask?: string;
-  set_with?: string;
-} {
-  if (v.status === "missing") {
-    return {
-      status: "missing",
-      ...(v.ask ? { ask: v.ask } : {}),
-      ...(v.set_with ? { set_with: v.set_with } : {}),
-    };
+function bundledKeys(result: DoctorResult): Set<string> {
+  const keys = new Set<string>();
+  for (const bundle of Object.values(result.bundles)) {
+    for (const v of bundle.surfaced) keys.add(v.key);
+    for (const key of bundle.secrets_set) keys.add(key);
+    for (const v of bundle.missing) {
+      if (v.key !== "(bundle)") keys.add(v.key);
+    }
   }
-  if (v.visibility === "public" && v.value !== undefined) {
-    return { status: "surfaced", value: v.value };
-  }
-  return { status: "set" };
+  return keys;
 }
 
-export function doctorToAgentOutput(result: DoctorResult): AgentDoctorOutput {
+export function showToAgentOutput(result: DoctorResult): AgentShowOutput {
   const bundles = Object.values(result.bundles);
-  const out: AgentDoctorOutput = { ready: result.ready };
+  const serviced = bundledKeys(result);
+  const unbundled = (result.vars ?? []).filter((v) => !serviced.has(v.key));
 
-  if (bundles.length > 0) {
-    out.bundles = Object.fromEntries(
-      bundles.map((b) => [b.name, bundleToAgentOutput(b)]),
-    );
-  } else if (result.vars) {
-    out.vars = Object.fromEntries(result.vars.map((v) => [v.key, varToAgentEntry(v)]));
-  }
-
-  if (result.project !== undefined) out.project = result.project;
-  if (result.global_home) out.global_home = result.global_home;
-  if (result.validate) out.validate = result.validate;
-
-  return out;
+  return {
+    ...(bundles.length > 0
+      ? { bundles: Object.fromEntries(bundles.map((b) => [b.name, bundleToAgentOutput(b)])) }
+      : {}),
+    ...(unbundled.length > 0
+      ? {
+          unbundled_secrets: Object.fromEntries(unbundled.map((v) => [
+            v.key,
+            v.status === "missing"
+              ? {
+                  status: "missing" as const,
+                  ...(v.ask ? { ask: v.ask } : {}),
+                  ...(v.set_with ? { set_with: v.set_with } : {}),
+                }
+              : { status: "set" as const },
+          ])),
+        }
+      : {}),
+    project: result.project,
+    global_home: result.global_home,
+    ...(result.validate ? { validate: result.validate } : {}),
+  };
 }

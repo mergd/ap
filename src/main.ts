@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { runGlobalDoctor, runDoctor } from "./doctor.ts";
-import { printDoctor } from "./doctor-format.ts";
+import { printShow } from "./doctor-format.ts";
 import {
   INIT_PROJECT_MANIFEST,
   loadManifest,
@@ -26,16 +26,14 @@ import { installSkill } from "./skill-install.ts";
 import { printHelp } from "./help.ts";
 import { ensureDir, pathExists, readTextFile, writeTextFile } from "./fs-helpers.ts";
 import { formatValidateReports, runValidate } from "./validate.ts";
-import { printCatalogList } from "./catalog/list.ts";
 import { buildManifestFromCatalog, mergeCatalogBundles } from "./catalog/scaffold.ts";
 import { printGuide } from "./guide.ts";
-import { printCommands } from "./commands.ts";
 import { formatSetupHuman, initEncryptionConfig, runEncryptionSetup } from "./encryption/setup.ts";
 import {
-  doctorToAgentOutput,
   parseOutputFormat,
   printMachineOutput,
   rejectRemovedFlags,
+  showToAgentOutput,
   stripOutputFlags,
 } from "./agent-output.ts";
 
@@ -45,7 +43,7 @@ function usage(): void {
 
 function stripFlags(args: string[]): string[] {
   const result = stripOutputFlags(args);
-  for (const flag of ["--global", "--validate", "--from-env", "--unset", "--human"]) {
+  for (const flag of ["--global", "--validate", "--check", "--from-env", "--human"]) {
     const idx = result.indexOf(flag);
     if (idx >= 0) result.splice(idx, 1);
   }
@@ -170,26 +168,10 @@ async function cmdSetup(): Promise<void> {
 
 async function cmdSet(
   key: string,
-  options: { global: boolean; fromEnv: boolean; unset: boolean },
+  options: { global: boolean; fromEnv: boolean },
 ): Promise<void> {
   const scope: Scope = options.global ? "global" : "project";
   const projectRoot = options.global ? null : await requireProjectRoot();
-
-  if (options.unset) {
-    const secretsPath = options.global
-      ? globalSecretsPath()
-      : projectSecretsPath(projectRoot!);
-    const vault = createVaultStore(secretsPath, {
-      projectRoot: options.global ? null : projectRoot,
-    });
-    const removed = await vault.unset(key);
-    if (!removed) {
-      console.error(`Error: ${key} not in vault`);
-      process.exit(1);
-    }
-    console.log(`Unset ${key}`);
-    return;
-  }
 
   await ensureVarInManifest(key, scope, projectRoot);
 
@@ -211,10 +193,11 @@ async function cmdSet(
   console.log(`${options.fromEnv ? "Adopted" : "Set"} ${key} (${scope})`);
 }
 
-async function cmdDoctor(
+async function cmdShow(
   format: ReturnType<typeof parseOutputFormat>,
   globalOnly: boolean,
   validate: boolean,
+  check: boolean,
   bundleFilter?: string,
 ): Promise<void> {
   const projectRoot = globalOnly ? null : await findProjectRoot();
@@ -223,19 +206,28 @@ async function cmdDoctor(
     : await runDoctor(projectRoot, bundleFilter);
 
   const validateReports = validate ? await runValidate(projectRoot) : undefined;
-  if (validateReports && !validateReports.every((r) => r.ok)) {
-    result.ready = false;
-  }
+  if (validateReports && !validateReports.every((r) => r.ok)) result.ready = false;
   if (validateReports) result.validate = validateReports;
 
-  if (format === "yaml") {
-    printMachineOutput(doctorToAgentOutput(result));
-  } else {
-    printDoctor(result);
+  if (format === "yaml") printMachineOutput(showToAgentOutput(result));
+  else {
+    printShow(result);
     if (validateReports) formatValidateReports(validateReports, "validate");
   }
 
-  if (!result.ready) process.exit(1);
+  if (check && !result.ready) process.exit(1);
+}
+
+async function cmdUnset(key: string, global: boolean): Promise<void> {
+  const projectRoot = global ? null : await requireProjectRoot();
+  const secretsPath = global ? globalSecretsPath() : projectSecretsPath(projectRoot!);
+  const vault = createVaultStore(secretsPath, { projectRoot });
+  const removed = await vault.unset(key);
+  if (!removed) {
+    console.error(`Error: ${key} not in vault`);
+    process.exit(1);
+  }
+  console.log(`Unset ${key}`);
 }
 
 async function cmdRun(cmd: string[], bundleFilter?: string): Promise<void> {
@@ -304,7 +296,12 @@ async function main(): Promise<void> {
     process.exit(args.length === 0 ? 1 : 0);
   }
 
-  rejectRemovedFlags(args);
+  try {
+    rejectRemovedFlags(args);
+  } catch (err) {
+    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
 
   const format = parseOutputFormat(args);
   const positional = stripFlags(args);
@@ -318,21 +315,6 @@ async function main(): Promise<void> {
     if (positional[0] === "guide") {
       printGuide(format);
       return;
-    }
-
-    if (positional[0] === "commands") {
-      printCommands(format);
-      return;
-    }
-
-    if (positional[0] === "catalog") {
-      const sub = positional[1];
-      if (sub === "list") {
-        printCatalogList(format);
-        return;
-      }
-      console.error("Unknown catalog command. Use: ap catalog list");
-      process.exit(1);
     }
 
     if (positional[0] === "skill") {
@@ -364,22 +346,34 @@ async function main(): Promise<void> {
         await cmdSet(key, {
           global: args.includes("--global"),
           fromEnv: args.includes("--from-env"),
-          unset: args.includes("--unset"),
         });
         break;
       }
-      case "doctor":
-        await cmdDoctor(
+      case "unset": {
+        const key = rest.find((a) => !a.startsWith("--"));
+        if (!key) {
+          console.error("Error: KEY required");
+          process.exit(1);
+        }
+        await cmdUnset(key, args.includes("--global"));
+        break;
+      }
+      case "show":
+        await cmdShow(
           format,
           args.includes("--global"),
           args.includes("--validate"),
-          parseBundleFilter(args),
+          args.includes("--check"),
+          parseBundleFilter(args) ?? rest.find((a) => !a.startsWith("--")),
         );
         break;
       case "run": {
         const dashIndex = args.indexOf("--");
         const cmdArgs = dashIndex >= 0 ? args.slice(dashIndex + 1) : rest;
-        await cmdRun(cmdArgs, parseBundleFilter(args));
+        const positionalBundle = dashIndex > 1
+          ? args.slice(1, dashIndex).find((a) => !a.startsWith("--"))
+          : undefined;
+        await cmdRun(cmdArgs, parseBundleFilter(args) ?? positionalBundle);
         break;
       }
       case "edit":

@@ -1,6 +1,6 @@
 # ap
 
-Agent-portable local secrets. Declare **bundles** of credentials in committed manifests, store secret values in gitignored vaults, and let agents check readiness with `ap doctor --json` before calling external APIs.
+Agent-portable local secrets. Declare **bundles** of credentials in committed manifests, store secret values in gitignored vaults, and let agents check readiness with `ap show <bundle> --check` before calling external APIs.
 
 ## Install
 
@@ -22,7 +22,7 @@ npm link   # or: ln -sf "$(pwd)/bin/ap" ~/.local/bin/ap
 
 ## Quick start
 
-Agents: run `ap guide` first (YAML contract for doctor → run → set).
+Agents: run `ap guide` first (YAML contract for show → run → set).
 
 ```bash
 # One-time machine setup
@@ -40,8 +40,8 @@ ap setup                            # SOPS + 1Password — safe to commit .ap/se
 echo "$NC_API_KEY" | ap set NC_API_KEY --global
 echo "$KEY" | ap set CF_GLOBAL_API_KEY --global
 
-# Check readiness
-ap doctor
+# Inspect secrets and check readiness
+ap show --check
 
 # Run commands with secrets injected
 ap run -- curl ...
@@ -69,10 +69,10 @@ ap skill install --project    # same paths under current repo
 
 Project secrets use **SOPS + age** with the private key in **1Password** (same pattern as [lockbox](https://github.com/mergd/lockbox)). Run `ap setup` once per repo; teammates need `op` access to decrypt.
 
-Public values surface immediately in `ap doctor`. Secrets are never shown — only `set_with` commands.
+Public bundle values surface immediately in `ap show`. Secrets are never shown — only status and `set_with` commands.
 
 ```bash
-ap guide              # agent contract (YAML default; --human for prose)
+ap guide              # agent contract
 ap help               # full command reference
 ```
 
@@ -80,18 +80,17 @@ ap help               # full command reference
 
 ```
 ap guide [--human]               Agent contract (primary entrypoint for agents)
-ap doctor [--bundle NAME] [--global] [--human] [--validate]
-ap set KEY [--global] [--from-env] [--unset]
-ap run [--bundle NAME] -- <cmd...>
+ap show [BUNDLE] [--global] [--check] [--validate]
+ap set KEY [--global] [--from-env]
+ap unset KEY [--global]
+ap run [BUNDLE] -- <cmd...>
 ap init [--global] [BUNDLE...]
 ap setup
-ap catalog list [--human]
-ap commands [--human]
 ap edit <secrets|manifest|toml> [--global]
 ap skill install [--project]
 ```
 
-Machine output is YAML by default (`--human` for readable text). Catalog bundles: `cloudflare`, `namecheap`, `openrouter`.
+Output is human-readable in a terminal and YAML when piped. Catalog bundles: `cloudflare`, `namecheap`, `openrouter`.
 
 ## Development
 
@@ -100,7 +99,7 @@ npm install
 npm run build
 npm test
 npm run check
-npm run dev -- doctor --json
+npm run dev -- show
 ```
 
 ## License

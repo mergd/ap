@@ -12,7 +12,9 @@ export function resolveCatalogBundleNames(requested: string[]): string[] {
 
   const unknown = requested.filter((name) => !getCatalogBundle(name));
   if (unknown.length > 0) {
-    throw new Error(`Unknown catalog bundle(s): ${unknown.join(", ")} — run: ap catalog list`);
+    throw new Error(
+      `Unknown bundle(s): ${unknown.join(", ")} — available: ${listCatalogBundles().join(", ")}`,
+    );
   }
 
   return requested;

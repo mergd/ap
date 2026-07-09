@@ -6,10 +6,10 @@ const cloudflare: CatalogBundle = {
   docs: "https://developers.cloudflare.com/fundamentals/api/get-started/keys/#global-api-key",
   prompt: [
     "Auth: X-Auth-Email = CF_GLOBAL_EMAIL, X-Auth-Key = CF_GLOBAL_API_KEY (not Bearer).",
-    "Inject vars with ap run --bundle cloudflare -- sh -c '...' when the command needs $VAR expansion.",
+    "Inject vars with ap run cloudflare -- sh -c '...' when the command needs $VAR expansion.",
   ].join("\n"),
   run_example:
-    'ap run --bundle cloudflare -- sh -c \'curl -sS -H "X-Auth-Email: $CF_GLOBAL_EMAIL" -H "X-Auth-Key: $CF_GLOBAL_API_KEY" https://api.cloudflare.com/client/v4/user\'',
+    'ap run cloudflare -- sh -c \'curl -sS -H "X-Auth-Email: $CF_GLOBAL_EMAIL" -H "X-Auth-Key: $CF_GLOBAL_API_KEY" https://api.cloudflare.com/client/v4/user\'',
   vars: {
     CF_GLOBAL_API_KEY: {
       visibility: "secret",
@@ -33,7 +33,7 @@ const openrouter: CatalogBundle = {
     "If parsing fails, inspect the response — do not POST again (that creates duplicate keys).",
   ].join("\n"),
   run_example:
-    'ap run --bundle openrouter -- sh -c \'curl -sS -X POST https://openrouter.ai/api/v1/keys -H "Authorization: Bearer $OPENROUTER_MANAGEMENT_API_KEY" -H "Content-Type: application/json" -d "{\\"name\\":\\"my-key\\",\\"limit\\":5,\\"limit_reset\\":\\"monthly\\"}" | jq -r ".key" | ap set OPENROUTER_API_KEY --global\'',
+    'ap run openrouter -- sh -c \'curl -sS -X POST https://openrouter.ai/api/v1/keys -H "Authorization: Bearer $OPENROUTER_MANAGEMENT_API_KEY" -H "Content-Type: application/json" -d "{\\"name\\":\\"my-key\\",\\"limit\\":5,\\"limit_reset\\":\\"monthly\\"}" | jq -r ".key" | ap set OPENROUTER_API_KEY --global\'',
   vars: {
     OPENROUTER_MANAGEMENT_API_KEY: {
       visibility: "secret",
@@ -54,7 +54,7 @@ const namecheap: CatalogBundle = {
     "Whitelist NC_CLIENT_IP in Namecheap before calling the API.",
   ].join("\n"),
   run_example:
-    'ap run --bundle namecheap -- sh -c \'curl -sS "https://api.namecheap.com/xml.response?ApiUser=$NC_API_USER&ApiKey=$NC_API_KEY&ClientIp=$NC_CLIENT_IP&Command=namecheap.users.getBalances"\'',
+    'ap run namecheap -- sh -c \'curl -sS "https://api.namecheap.com/xml.response?ApiUser=$NC_API_USER&ApiKey=$NC_API_KEY&ClientIp=$NC_CLIENT_IP&Command=namecheap.users.getBalances"\'',
   vars: {
     NC_API_USER: {
       visibility: "public",

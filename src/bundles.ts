@@ -47,10 +47,11 @@ export function collectBundleVarKeys(
     for (const key of bundle.vars) keys.add(key);
   }
 
-  const extraManifest = ctx.projectManifest ?? ctx.globalManifest;
-  if (extraManifest) {
-    for (const key of extraManifest.vars.keys()) keys.add(key);
-  }
+  // Vars outside bundles remain available as runtime-only secrets. Include both
+  // layers here: a project manifest that only selects bundles must not hide
+  // standalone vars declared in the global manifest.
+  for (const key of ctx.globalManifest?.vars.keys() ?? []) keys.add(key);
+  for (const key of ctx.projectManifest?.vars.keys() ?? []) keys.add(key);
 
   return [...keys].sort();
 }

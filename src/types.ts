@@ -114,21 +114,8 @@ export interface AgentGuide {
   workflow: Array<Record<string, string>>;
   rules: {
     never_request_secrets_in_chat: boolean;
-    prefer_bundle_filter: boolean;
+    prefer_bundle: boolean;
   };
   commands: Record<string, string>;
   paths: Record<string, string>;
-}
-
-export interface CommandSpec {
-  name: string;
-  summary?: string;
-  agent?: boolean;
-  flags?: string[];
-  usage?: string;
-  subcommands?: Array<{
-    name: string;
-    summary?: string;
-    flags?: string[];
-  }>;
 }

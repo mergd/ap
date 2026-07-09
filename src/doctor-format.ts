@@ -87,29 +87,32 @@ function formatVarFallback(vars: ResolvedVar[]): string[] {
   return lines;
 }
 
-export function printDoctor(result: DoctorResult): void {
+export function printShow(result: DoctorResult): void {
   const bundles = Object.values(result.bundles);
-  const readyCount = bundles.filter((b) => b.ready).length;
-  const total = bundles.length;
+  const bundled = new Set<string>();
+  for (const bundle of bundles) {
+    for (const v of bundle.surfaced) bundled.add(v.key);
+    for (const key of bundle.secrets_set) bundled.add(key);
+    for (const v of bundle.missing) {
+      if (v.key !== "(bundle)") bundled.add(v.key);
+    }
+  }
+  const unbundled = (result.vars ?? []).filter((v) => !bundled.has(v.key));
 
   console.log("");
-  console.log(`  ${bold("ap doctor")}`);
+  console.log(`  ${bold("ap show")}`);
 
-  if (total > 0) {
-    const summary = result.ready
-      ? green(`ready · ${readyCount}/${total} bundles`)
-      : red(`not ready · ${readyCount}/${total} bundles`);
-    console.log(`  ${summary}`);
+  if (bundles.length > 0) {
+    console.log(`  ${dim("bundles")}`);
     for (const bundle of bundles) {
       for (const line of formatBundle(bundle)) console.log(line);
     }
-  } else if (result.vars) {
-    const setCount = result.vars.filter((v) => v.status === "set").length;
-    const summary = result.ready
-      ? green(`ready · ${setCount}/${result.vars.length} vars`)
-      : red(`not ready · ${setCount}/${result.vars.length} vars`);
-    console.log(`  ${summary}`);
-    for (const line of formatVarFallback(result.vars)) console.log(line);
+  }
+
+  if (unbundled.length > 0) {
+    console.log("");
+    console.log(`  ${dim("unbundled secrets")}`);
+    for (const line of formatVarFallback(unbundled)) console.log(line);
   }
 
   console.log("");

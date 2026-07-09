@@ -6,7 +6,7 @@ version = 1
 [bundle.cloudflare]
 ask = "Global API Key + account email."
 docs = "https://developers.cloudflare.com/fundamentals/api/get-started/keys/#global-api-key"
-prompt = "Auth: X-Auth-Email = CF_GLOBAL_EMAIL, X-Auth-Key = CF_GLOBAL_API_KEY (not Bearer).\nInject vars with ap run --bundle cloudflare -- sh -c '...' when the command needs $VAR expansion."
+prompt = "Auth: X-Auth-Email = CF_GLOBAL_EMAIL, X-Auth-Key = CF_GLOBAL_API_KEY (not Bearer).\nInject vars with ap run cloudflare -- sh -c '...' when the command needs $VAR expansion."
 vars = ["CF_GLOBAL_API_KEY","CF_GLOBAL_EMAIL"]
 
 [var.CF_GLOBAL_API_KEY]

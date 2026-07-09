@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { parseManifestContent } from "../src/manifest.ts";
 import { resolveBundles } from "../src/bundles.ts";
-import { resolveVar, loadResolveContext, resolveAll, type ResolveContext } from "../src/resolve.ts";
+import { resolveVar, loadResolveContext, resolveAll, resolveForRun, type ResolveContext } from "../src/resolve.ts";
 import { runDoctor } from "../src/doctor.ts";
 import type { VarDefinition } from "../src/types.ts";
 
@@ -87,7 +87,7 @@ describe("resolveVar", () => {
     expect(resolved.value).toBe("tok123");
   });
 
-  test("masks secrets in doctor mode", async () => {
+  test("masks secrets in show mode", async () => {
     const def: VarDefinition = {
       key: "NC_API_KEY",
       visibility: "secret",
@@ -194,7 +194,7 @@ describe("resolveVar", () => {
 });
 
 describe("bundles", () => {
-  test("doctor groups by bundle and surfaces public vars", async () => {
+  test("show groups by bundle and surfaces public vars", async () => {
     const dir = await mkdtemp(join(tmpdir(), "ap-bundle-"));
     const globalDir = join(dir, "global");
     const prevHome = process.env.AP_GLOBAL_HOME;
@@ -267,5 +267,61 @@ vars = ["NC_API_KEY"]
     const bundles = await resolveBundles(ctx, vars);
     expect(bundles.namecheap.ready).toBe(false);
     expect(bundles.namecheap.missing[0]?.key).toBe("NC_API_KEY");
+  });
+
+  test("treats vars outside active bundles as secrets", async () => {
+    const ctx: ResolveContext = {
+      projectRoot: "/tmp",
+      globalManifest: parseManifestContent(`version = 1
+[bundle.namecheap]
+vars = ["NC_API_USER"]
+
+[var.NC_API_USER]
+visibility = "public"
+value = "testuser"
+
+[var.STANDALONE_VALUE]
+visibility = "public"
+value = "do-not-surface"
+`, "g"),
+      projectManifest: parseManifestContent("version = 1\nbundles = [\"namecheap\"]\n", "p"),
+      globalSecrets: {},
+      projectSecrets: {},
+    };
+
+    const vars = await resolveAll(ctx, { surfacePublic: true });
+    const bundled = vars.find((v) => v.key === "NC_API_USER")!;
+    const standalone = vars.find((v) => v.key === "STANDALONE_VALUE")!;
+
+    expect(bundled.visibility).toBe("public");
+    expect(bundled.value).toBe("testuser");
+    expect(standalone.visibility).toBe("secret");
+    expect(standalone.masked).toBe(true);
+    expect(standalone.value).toBeUndefined();
+  });
+
+  test("still injects vars outside active bundles at run time", async () => {
+    const ctx: ResolveContext = {
+      projectRoot: "/tmp",
+      globalManifest: parseManifestContent(`version = 1
+[bundle.namecheap]
+vars = ["NC_API_USER"]
+
+[var.NC_API_USER]
+visibility = "public"
+value = "testuser"
+
+[var.STANDALONE_VALUE]
+visibility = "public"
+value = "runtime-only"
+`, "g"),
+      projectManifest: parseManifestContent("version = 1\nbundles = [\"namecheap\"]\n", "p"),
+      globalSecrets: {},
+      projectSecrets: {},
+    };
+
+    const env = await resolveForRun(ctx);
+    expect(env.NC_API_USER).toBe("testuser");
+    expect(env.STANDALONE_VALUE).toBe("runtime-only");
   });
 });

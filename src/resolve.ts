@@ -174,7 +174,27 @@ async function resolveKey(ctx: ResolveContext, key: string, options?: ResolveOpt
   const projectDef = isProjectKey ? ctx.projectManifest?.vars.get(key) : undefined;
   const globalDef = ctx.globalManifest?.vars.get(key);
   const def = mergeDefinition(key, projectDef, globalDef, isProjectKey);
-  return await resolveVar(ctx, def, options);
+  const resolved = await resolveVar(ctx, def, options);
+
+  const bundleNames = options?.bundleFilter
+    ? [options.bundleFilter]
+    : getActiveBundleNames(ctx, options?.globalOnly ?? false) ?? [];
+  const isServicedByBundle = bundleNames.some((name) =>
+    mergeBundleDefinition(name, ctx.projectManifest, ctx.globalManifest)?.vars.includes(key)
+  );
+
+  // Standalone vars are still injected by `ap run`, but they are not part of the
+  // bundle's surfaced contract. Treat them as secrets even if their manifest
+  // definition says public so show output can never expose them.
+  if (!isServicedByBundle) {
+    resolved.visibility = "secret";
+    if (resolved.status === "set" && !options?.includeSecrets && !options?.forRun) {
+      delete resolved.value;
+      resolved.masked = true;
+    }
+  }
+
+  return resolved;
 }
 
 export async function resolveAll(

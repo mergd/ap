@@ -9,26 +9,18 @@ const topics: Record<string, string> = {
     ap guide
     ap guide --human`,
 
-  commands: `ap commands — subcommand introspection
+  show: `ap show — inspect and check secrets
 
-  ap commands [--human]
+  ap show [BUNDLE] [--global] [--check] [--validate] [--human]
 
-  YAML by default. Lists all subcommands, flags, and agent relevance.
-
-  Examples:
-    ap commands`,
-
-  doctor: `ap doctor — readiness check
-
-  ap doctor [--human] [--bundle NAME] [--global] [--validate]
-
-  YAML by default. Checks bundle readiness. Repo ap.toml first, then global fallback.
-  --validate also lints manifests (inline secrets in git, bundle refs).
+  Shows bundle status plus unbundled secrets. Secret values are never shown.
+  --check exits nonzero when the selected secrets are not ready.
+  --validate also checks manifests and project encryption.
 
   Examples:
-    ap doctor
-    ap doctor --bundle namecheap
-    ap doctor --human`,
+    ap show
+    ap show cloudflare --check
+    ap show --global --validate`,
 
   edit: `ap edit — open manifests or secrets in $EDITOR
 
@@ -44,24 +36,30 @@ const topics: Record<string, string> = {
 
   run: `ap run — inject secrets and run a command
 
-  ap run [--bundle NAME] -- <cmd...>
+  ap run [BUNDLE] -- <cmd...>
 
   Resolves bundle vars, merges env, spawns subprocess.
   Use sh -c when the command needs shell env expansion ($VAR in args).
 
   Examples:
-    ap run --bundle cloudflare -- sh -c \\
+    ap run cloudflare -- sh -c \\
       'curl -sS -H "X-Auth-Email: $CF_GLOBAL_EMAIL" -H "X-Auth-Key: $CF_GLOBAL_API_KEY" https://api.cloudflare.com/client/v4/user'`,
 
-  set: `ap set — store or remove a secret
+  set: `ap set — store a secret
 
   ap set KEY [--global]              stdin → vault
   ap set KEY --from-env [--global]   copy from process.env
-  ap set KEY --unset [--global]      remove from vault
 
   Examples:
     echo "$KEY" | ap set NC_API_KEY --global
     ap set NC_API_KEY --from-env --global`,
+
+  unset: `ap unset — remove a secret
+
+  ap unset KEY [--global]
+
+  Examples:
+    ap unset NC_API_KEY --global`,
 
   setup: `ap setup — enable SOPS encryption via 1Password
 
@@ -100,11 +98,6 @@ const topics: Record<string, string> = {
   --project   install under current repo
   (default)   install under home directory (all projects)`,
 
-  catalog: `ap catalog list — available bundle templates
-
-  ap catalog list [--human]
-
-  YAML by default. Templates copied into ~/.config/ap/manifest.toml via ap init --global.`,
 };
 
 function mainHelp(): string {
@@ -113,14 +106,13 @@ function mainHelp(): string {
 Usage:
   ap help [topic]                  Per-command help
 
-  ap guide [--human]               Agent contract (YAML default)
-  ap commands [--human]            Subcommand introspection
+  ap guide [--human]               Agent contract
   ap init [--global] [BUNDLE...]   Scaffold project or global manifest
   ap setup                         Encrypt project secrets (SOPS + 1Password)
-  ap catalog list [--human]        Available catalog bundles
-  ap set KEY [--global] [--from-env] [--unset]
-  ap doctor [--human] [--bundle NAME] [--global] [--validate]
-  ap run [--bundle NAME] -- <cmd...>
+  ap show [BUNDLE] [--global] [--check] [--validate]
+  ap set KEY [--global] [--from-env]
+  ap unset KEY [--global]
+  ap run [BUNDLE] -- <cmd...>
   ap edit <secrets|manifest|toml> [--global]
   ap skill install [--project]
 
