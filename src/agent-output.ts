@@ -12,7 +12,7 @@ const REMOVED_FLAGS = ["--yaml", "--json"] as const;
 
 export function rejectRemovedFlags(args: string[]): void {
   if (args.includes("--unset")) {
-    throw new Error("unknown flag --unset (use: ap unset KEY [--global])");
+    throw new Error("unknown flag --unset (use: ap unset KEY)");
   }
   for (const flag of REMOVED_FLAGS) {
     if (args.includes(flag)) {
@@ -40,6 +40,8 @@ export interface AgentBundleOutput {
 }
 
 export interface AgentShowOutput {
+  ready: boolean;
+  next?: string;
   bundles?: Record<string, AgentBundleOutput>;
   unbundled_secrets?: Record<string, {
     status: "set" | "missing";
@@ -93,10 +95,18 @@ export function showToAgentOutput(result: DoctorResult): AgentShowOutput {
   const serviced = bundledKeys(result);
   const unbundled = (result.vars ?? []).filter((v) => !serviced.has(v.key));
 
+  const bundleOut = bundles.length > 0
+    ? Object.fromEntries(bundles.map((b) => [b.name, bundleToAgentOutput(b)]))
+    : undefined;
+
+  const topNext =
+    bundles.find((b) => !b.ready && b.missing[0])?.missing[0]?.set_with
+    ?? unbundled.find((v) => v.status === "missing")?.set_with;
+
   return {
-    ...(bundles.length > 0
-      ? { bundles: Object.fromEntries(bundles.map((b) => [b.name, bundleToAgentOutput(b)])) }
-      : {}),
+    ready: result.ready,
+    ...(topNext ? { next: topNext } : {}),
+    ...(bundleOut ? { bundles: bundleOut } : {}),
     ...(unbundled.length > 0
       ? {
           unbundled_secrets: Object.fromEntries(unbundled.map((v) => [

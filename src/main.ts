@@ -4,9 +4,9 @@ import { printShow } from "./doctor-format.ts";
 import {
   INIT_PROJECT_MANIFEST,
   loadManifest,
-  saveManifest,
   saveManifestContent,
   parseManifestContent,
+  emptyManifest,
 } from "./manifest.ts";
 import {
   findProjectRoot,
@@ -21,12 +21,13 @@ import {
 import { runCommand } from "./run.ts";
 import { createVaultStore, readStdinSecret } from "./vault.ts";
 import type { Scope } from "./types.ts";
-import { getPathsInfo, openInEditor, resolveEditPath, resolveEditScope, type EditTarget } from "./edit.ts";
+import { getPathsInfo, openInEditor, parseEditTarget, resolveEditPath, resolveEditScope } from "./edit.ts";
 import { installSkill } from "./skill-install.ts";
 import { printHelp } from "./help.ts";
 import { ensureDir, pathExists, readTextFile, writeTextFile } from "./fs-helpers.ts";
 import { formatValidateReports, runValidate } from "./validate.ts";
 import { buildManifestFromCatalog, mergeCatalogBundles } from "./catalog/scaffold.ts";
+import { printCatalog } from "./catalog/list.ts";
 import { printGuide } from "./guide.ts";
 import { formatSetupHuman, initEncryptionConfig, runEncryptionSetup } from "./encryption/setup.ts";
 import {
@@ -42,9 +43,13 @@ function usage(): void {
   printHelp();
 }
 
+function hasGlobalFlag(args: string[]): boolean {
+  return args.includes("--global") || args.includes("-g");
+}
+
 function stripFlags(args: string[]): string[] {
   const result = stripOutputFlags(args);
-  for (const flag of ["--global", "--validate", "--check", "--from-env", "--human"]) {
+  for (const flag of ["--global", "-g", "--project", "--validate", "--check", "--from-env", "--human"]) {
     const idx = result.indexOf(flag);
     if (idx >= 0) result.splice(idx, 1);
   }
@@ -67,21 +72,30 @@ async function requireProjectRoot(): Promise<string> {
   return root;
 }
 
+/** Default scope is global; --project selects the repo vault. -g/--global kept as explicit. */
+function resolveSetScope(args: string[]): Scope {
+  if (args.includes("--project") && hasGlobalFlag(args)) {
+    console.error("Error: use either --project or -g/--global, not both");
+    process.exit(1);
+  }
+  return args.includes("--project") ? "project" : "global";
+}
+
 async function ensureVarInManifest(
   key: string,
   scope: Scope,
   projectRoot: string | null,
 ): Promise<void> {
   if (scope === "global") {
+    await ensureDir(globalHome());
     const path = globalManifestPath();
-    const manifest = await loadManifest(path);
+    let manifest = await loadManifest(path);
     if (!manifest) {
-      console.error("Error: global manifest not found. Run `ap init --global` first.");
-      process.exit(1);
+      manifest = emptyManifest();
     }
     if (!manifest.vars.has(key)) {
       manifest.vars.set(key, { key, visibility: "secret", scope: "global" });
-      await saveManifest(path, manifest.vars);
+      await saveManifestContent(path, manifest);
     }
     return;
   }
@@ -95,7 +109,7 @@ async function ensureVarInManifest(
   }
   if (!manifest.vars.has(key)) {
     manifest.vars.set(key, { key, visibility: "secret", scope: "project" });
-    await saveManifest(path, manifest.vars);
+    await saveManifestContent(path, manifest);
   }
 }
 
@@ -169,12 +183,9 @@ async function cmdSetup(): Promise<void> {
 
 async function cmdSet(
   key: string,
-  options: { global: boolean; fromEnv: boolean },
+  options: { scope: Scope; fromEnv: boolean },
 ): Promise<void> {
-  const scope: Scope = options.global ? "global" : "project";
-  const projectRoot = options.global ? null : await requireProjectRoot();
-
-  await ensureVarInManifest(key, scope, projectRoot);
+  const projectRoot = options.scope === "project" ? await requireProjectRoot() : null;
 
   const value = options.fromEnv ? process.env[key] : await readStdinSecret();
   if (!value) {
@@ -186,12 +197,16 @@ async function cmdSet(
     process.exit(1);
   }
 
-  const secretsPath = options.global ? globalSecretsPath() : projectSecretsPath(projectRoot!);
+  await ensureVarInManifest(key, options.scope, projectRoot);
+
+  const secretsPath = options.scope === "global"
+    ? globalSecretsPath()
+    : projectSecretsPath(projectRoot!);
   const vault = createVaultStore(secretsPath, {
-    projectRoot: options.global ? null : projectRoot,
+    projectRoot: options.scope === "global" ? null : projectRoot,
   });
   await vault.set(key, value);
-  console.log(`${options.fromEnv ? "Adopted" : "Set"} ${key} (${scope})`);
+  console.log(`${options.fromEnv ? "Adopted" : "Set"} ${key} (${options.scope})`);
 }
 
 async function cmdShow(
@@ -219,16 +234,16 @@ async function cmdShow(
   if (check && !result.ready) process.exit(1);
 }
 
-async function cmdUnset(key: string, global: boolean): Promise<void> {
-  const projectRoot = global ? null : await requireProjectRoot();
-  const secretsPath = global ? globalSecretsPath() : projectSecretsPath(projectRoot!);
+async function cmdUnset(key: string, scope: Scope): Promise<void> {
+  const projectRoot = scope === "project" ? await requireProjectRoot() : null;
+  const secretsPath = scope === "global" ? globalSecretsPath() : projectSecretsPath(projectRoot!);
   const vault = createVaultStore(secretsPath, { projectRoot });
   const removed = await vault.unset(key);
   if (!removed) {
     console.error(`Error: ${key} not in vault`);
     process.exit(1);
   }
-  console.log(`Unset ${key}`);
+  console.log(`Unset ${key} (${scope})`);
 }
 
 async function cmdRun(cmd: string[], bundleFilter?: string): Promise<void> {
@@ -241,21 +256,21 @@ async function cmdRun(cmd: string[], bundleFilter?: string): Promise<void> {
   process.exit(code);
 }
 
-function parseEditTarget(raw: string): EditTarget {
-  if (raw === "secrets") return "secrets";
-  if (raw === "manifest") return "manifest";
-  if (raw === "toml") return "toml";
-  throw new Error(`Unknown edit target "${raw}" (use: secrets, manifest, toml)`);
-}
-
 async function cmdEdit(rest: string[], globalFlag: boolean): Promise<void> {
   const raw = rest.find((a) => !a.startsWith("--"));
   if (!raw) {
-    console.error("Error: target required (secrets, manifest, toml)");
+    console.error("Error: target required (secrets, global, project)");
     process.exit(1);
   }
 
-  const target = parseEditTarget(raw);
+  let target;
+  try {
+    target = parseEditTarget(raw);
+  } catch (err) {
+    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+
   const project = await findProjectRoot();
   const scope = resolveEditScope(target, globalFlag, project !== null);
 
@@ -336,8 +351,8 @@ async function main(): Promise<void> {
 
     switch (cmd) {
       case "init": {
-        const global = args.includes("--global");
-        const bundleNames = rest.filter((a) => !a.startsWith("--"));
+        const global = hasGlobalFlag(args);
+        const bundleNames = rest.filter((a) => !a.startsWith("-"));
         await cmdInit(global, bundleNames);
         break;
       }
@@ -348,7 +363,7 @@ async function main(): Promise<void> {
           process.exit(1);
         }
         await cmdSet(key, {
-          global: args.includes("--global"),
+          scope: resolveSetScope(args),
           fromEnv: args.includes("--from-env"),
         });
         break;
@@ -359,18 +374,28 @@ async function main(): Promise<void> {
           console.error("Error: KEY required");
           process.exit(1);
         }
-        await cmdUnset(key, args.includes("--global"));
+        await cmdUnset(key, resolveSetScope(args));
         break;
       }
       case "show":
+      case "doctor": // alias — prefer `show`
         await cmdShow(
           format,
-          args.includes("--global"),
+          hasGlobalFlag(args),
           args.includes("--validate"),
           args.includes("--check"),
-          parseBundleFilter(args) ?? rest.find((a) => !a.startsWith("--")),
+          parseBundleFilter(args) ?? rest.find((a) => !a.startsWith("-")),
         );
         break;
+      case "catalog": {
+        const sub = rest[0] ?? "list";
+        if (sub !== "list") {
+          console.error("Unknown catalog command. Use: ap catalog");
+          process.exit(1);
+        }
+        printCatalog(format);
+        break;
+      }
       case "run": {
         const dashIndex = args.indexOf("--");
         const cmdArgs = dashIndex >= 0 ? args.slice(dashIndex + 1) : rest;
@@ -381,7 +406,7 @@ async function main(): Promise<void> {
         break;
       }
       case "edit":
-        await cmdEdit(rest, args.includes("--global"));
+        await cmdEdit(rest, hasGlobalFlag(args));
         break;
       case "setup":
         await cmdSetup();

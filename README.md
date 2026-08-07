@@ -25,38 +25,38 @@ npm link   # or: ln -sf "$(pwd)/bin/ap" ~/.local/bin/ap
 Agents: run `ap guide` first (YAML contract for show → run → set).
 
 ```bash
-# One-time machine setup
-ap init --global                    # all catalog bundles → ~/.config/ap/manifest.toml
-# ap init --global cloudflare       # or pick bundles
-# ap init --global openrouter       # merge OpenRouter bundle into existing manifest
+# Optional: copy catalog templates into the global manifest
+ap init -g                      # all catalog bundles → ~/.config/ap/manifest.toml
+# ap init -g cloudflare         # or pick bundles
 
-# Per repo (optional — global fallback works without ap.toml)
+# Per repo (optional — catalog fallback works without copying bundles globally)
 ap init
-eval "$(op signin)"
-ap setup                            # SOPS + 1Password — safe to commit .ap/secrets.json
 # edit ap.toml → bundles = ["namecheap", "cloudflare"]
+eval "$(op signin)"
+ap setup                        # SOPS + 1Password — safe to commit .ap/secrets.json
 
-# Set secrets (never paste in chat)
-echo "$NC_API_KEY" | ap set NC_API_KEY --global
-echo "$KEY" | ap set CF_GLOBAL_API_KEY --global
+# Set secrets (global by default)
+echo "$NC_API_KEY" | ap set NC_API_KEY
+echo "$KEY" | ap set CF_GLOBAL_API_KEY
 
 # Inspect secrets and check readiness
 ap show --check
+ap show cloudflare --check
 
 # Run commands with secrets injected
-ap run -- curl ...
+ap run cloudflare -- curl ...
 ```
 
 Install the agent skill (Cursor, Claude Code, Codex):
 
 ```bash
-ap skill install              # ~/.agents/skills/ap/, ~/.claude/skills/ap/, ~/.cursor/skills/ap/
+ap skill install              # ~/.agents/skills/ap/ (+ symlinks for claude/cursor)
 ap skill install --project    # same paths under current repo
 ```
 
 ## How it works
 
-**Bundles** group related env vars for a capability (e.g. `namecheap` → `NC_API_USER`, `NC_API_KEY`, `NC_CLIENT_IP`).
+**Bundles** group related env vars for a capability (e.g. `namecheap` → `NC_API_USER`, `NC_API_KEY`, `NC_CLIENT_IP`). Built-in catalog templates resolve at runtime even if not copied into `~/.config/ap/manifest.toml`.
 
 | File | Purpose |
 |------|---------|
@@ -73,6 +73,7 @@ Public bundle values surface immediately in `ap show`. Secrets are never shown �
 
 ```bash
 ap guide              # agent contract
+ap catalog            # built-in templates
 ap help               # full command reference
 ```
 
@@ -80,15 +81,18 @@ ap help               # full command reference
 
 ```
 ap guide [--human]               Agent contract (primary entrypoint for agents)
-ap show [BUNDLE] [--global] [--check] [--validate]
-ap set KEY [--global] [--from-env]
-ap unset KEY [--global]
+ap show [BUNDLE] [-g] [--check] [--validate]
+ap catalog
+ap set KEY [-g|--project] [--from-env]
+ap unset KEY [-g|--project]
 ap run [BUNDLE] -- <cmd...>
-ap init [--global] [BUNDLE...]
+ap init [-g|--global] [BUNDLE...]
 ap setup
-ap edit <secrets|manifest|toml> [--global]
+ap edit <secrets|global|project> [-g]
 ap skill install [--project]
 ```
+
+`-g` is short for `--global`. `ap set` / `ap unset` default to the global vault; use `--project` for the repo vault.
 
 Output is human-readable in a terminal and YAML when piped. Catalog bundles: `cloudflare`, `namecheap`, `openrouter`.
 

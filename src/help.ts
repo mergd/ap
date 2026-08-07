@@ -11,9 +11,10 @@ const topics: Record<string, string> = {
 
   show: `ap show — inspect and check secrets
 
-  ap show [BUNDLE] [--global] [--check] [--validate] [--human]
+  ap show [BUNDLE] [-g|--global] [--check] [--validate] [--human]
 
   Shows bundle status plus unbundled secrets. Secret values are never shown.
+  Catalog bundles resolve even if not copied into the global manifest.
   --check exits nonzero when the selected secrets are not ready.
   --validate also checks manifests and project encryption.
 
@@ -22,44 +23,59 @@ const topics: Record<string, string> = {
     ap show cloudflare --check
     ap show --global --validate`,
 
-  edit: `ap edit — open manifests or secrets in $EDITOR
+  catalog: `ap catalog — list built-in bundle templates
 
-  ap edit <secrets|manifest|toml> [--global]
+  ap catalog [--human]
 
-  secrets   secret values (JSON); falls back to global if no ap.toml
-  manifest  global bundles + public vars (TOML)
-  toml      project ap.toml
+  YAML by default. Templates used by ap init --global and as runtime fallback.
 
   Examples:
-    ap edit secrets --global
-    ap edit toml`,
+    ap catalog
+    ap catalog --human`,
+
+  edit: `ap edit — open manifests or secrets in $EDITOR
+
+  ap edit <secrets|global|project> [-g|--global]
+
+  secrets   secret values (JSON); falls back to global if no ap.toml
+  global    ~/.config/ap/manifest.toml (alias: manifest)
+  project   repo ap.toml (alias: toml)
+
+  Examples:
+    ap edit secrets
+    ap edit global
+    ap edit project`,
 
   run: `ap run — inject secrets and run a command
 
   ap run [BUNDLE] -- <cmd...>
 
   Resolves bundle vars, merges env, spawns subprocess.
+  Unknown bundle names error (run: ap catalog).
   Use sh -c when the command needs shell env expansion ($VAR in args).
 
   Examples:
     ap run cloudflare -- sh -c \\
       'curl -sS -H "X-Auth-Email: $CF_GLOBAL_EMAIL" -H "X-Auth-Key: $CF_GLOBAL_API_KEY" https://api.cloudflare.com/client/v4/user'`,
 
-  set: `ap set — store a secret
+  set: `ap set — store a secret (global by default)
 
-  ap set KEY [--global]              stdin → vault
-  ap set KEY --from-env [--global]   copy from process.env
-
-  Examples:
-    echo "$KEY" | ap set NC_API_KEY --global
-    ap set NC_API_KEY --from-env --global`,
-
-  unset: `ap unset — remove a secret
-
-  ap unset KEY [--global]
+  ap set KEY [--project]              stdin → vault
+  ap set KEY --from-env [--project]   copy from process.env
+  ap set KEY -g|--global              same as default (explicit)
 
   Examples:
-    ap unset NC_API_KEY --global`,
+    echo "$KEY" | ap set NC_API_KEY
+    ap set NC_API_KEY --from-env
+    echo "$TOKEN" | ap set DEPLOY_TOKEN --project`,
+
+  unset: `ap unset — remove a secret (global by default)
+
+  ap unset KEY [--project]
+
+  Examples:
+    ap unset NC_API_KEY
+    ap unset DEPLOY_TOKEN --project`,
 
   setup: `ap setup — enable SOPS encryption via 1Password
 
@@ -78,14 +94,16 @@ const topics: Record<string, string> = {
 
   init: `ap init — scaffold project or global manifest
 
-  ap init [--global] [BUNDLE...]
+  ap init [-g|--global] [BUNDLE...]
 
   Project: creates ap.toml + .ap/ (once).
   Global: creates or merges catalog bundles into ~/.config/ap/manifest.toml.
+  Catalog bundles also resolve at runtime without copying — init -g is
+  optional when you only need readiness / ap run.
   After project init, run ap setup to encrypt secrets for git.
 
   Examples:
-    ap init --global cloudflare namecheap
+    ap init -g cloudflare namecheap
     ap init
     ap setup`,
 
@@ -93,7 +111,7 @@ const topics: Record<string, string> = {
 
   ap skill install [--project]
 
-  Generates SKILL.md from ap guide (not a static copy).
+  Writes a short agent skill (workflow + rules + commands).
   Installs to .agents/skills/ap/, .claude/skills/ap/, and .cursor/skills/ap/.
   --project   install under current repo
   (default)   install under home directory (all projects)`,
@@ -107,13 +125,14 @@ Usage:
   ap help [topic]                  Per-command help
 
   ap guide [--human]               Agent contract
-  ap init [--global] [BUNDLE...]   Scaffold project or global manifest
-  ap setup                         Encrypt project secrets (SOPS + 1Password)
-  ap show [BUNDLE] [--global] [--check] [--validate]
-  ap set KEY [--global] [--from-env]
-  ap unset KEY [--global]
+  ap show [BUNDLE] [--check]       Readiness (YAML default)
+  ap catalog                       Built-in bundle templates
+  ap set KEY [--project] [--from-env]
+  ap unset KEY [--project]
   ap run [BUNDLE] -- <cmd...>
-  ap edit <secrets|manifest|toml> [--global]
+  ap init [-g|--global] [BUNDLE...]
+  ap setup                         Encrypt project secrets (SOPS + 1Password)
+  ap edit <secrets|global|project>
   ap skill install [--project]
 
 Topics: ${Object.keys(topics).join(", ")}

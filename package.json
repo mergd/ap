@@ -20,7 +20,8 @@
     "dist",
     "schema",
     ".agents/skills/ap",
-    ".claude/skills/ap"
+    ".claude/skills/ap",
+    ".cursor/skills/ap"
   ],
   "engines": {
     "node": ">=18"

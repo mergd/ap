@@ -1,4 +1,4 @@
 version = 1
 
-# API credential bundles — not CLI login (railway/vercel use `railway login` / `vercel login`)
+# Opt into catalog / global bundles (definitions fall back to built-in catalog)
 bundles = ["namecheap", "cloudflare"]

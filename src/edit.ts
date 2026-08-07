@@ -36,13 +36,21 @@ export async function getPathsInfo(): Promise<ApPathsInfo> {
 
 export type EditTarget = "secrets" | "manifest" | "toml";
 
+/** Canonicalize user-facing edit targets (global/project aliases). */
+export function parseEditTarget(raw: string): EditTarget {
+  if (raw === "secrets") return "secrets";
+  if (raw === "manifest" || raw === "global") return "manifest";
+  if (raw === "toml" || raw === "project") return "toml";
+  throw new Error(`Unknown edit target "${raw}" (use: secrets, global, project)`);
+}
+
 export function resolveEditScope(
   target: EditTarget,
   globalFlag: boolean,
   hasProject: boolean,
 ): { useGlobal: boolean; fallbackToGlobal?: boolean; error?: string } {
   if (target === "toml" && globalFlag) {
-    return { useGlobal: false, error: "toml is always project-scoped (omit --global)" };
+    return { useGlobal: false, error: "project is always project-scoped (omit -g/--global)" };
   }
   if (target === "manifest") {
     return { useGlobal: true };

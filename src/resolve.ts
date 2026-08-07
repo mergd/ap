@@ -8,7 +8,13 @@ import {
 } from "./paths.ts";
 import { loadManifest } from "./manifest.ts";
 import { createVaultStore } from "./vault.ts";
-import { collectBundleVarKeys, getActiveBundleNames, mergeBundleDefinition } from "./bundles.ts";
+import {
+  collectBundleVarKeys,
+  getActiveBundleNames,
+  lookupCatalogVar,
+  mergeBundleDefinition,
+  requiredRunKeys,
+} from "./bundles.ts";
 import type {
   ResolvedVar,
   ResolveContext,
@@ -64,7 +70,7 @@ export function mergeDefinition(
 }
 
 function setWithCommand(key: string, scope: Scope): string {
-  return scope === "global" ? `ap set ${key} --global` : `ap set ${key}`;
+  return scope === "project" ? `ap set ${key} --project` : `ap set ${key}`;
 }
 
 export async function resolveVar(
@@ -173,7 +179,10 @@ async function resolveKey(ctx: ResolveContext, key: string, options?: ResolveOpt
   const isProjectKey = !options?.globalOnly && (ctx.projectManifest?.vars.has(key) ?? false);
   const projectDef = isProjectKey ? ctx.projectManifest?.vars.get(key) : undefined;
   const globalDef = ctx.globalManifest?.vars.get(key);
-  const def = mergeDefinition(key, projectDef, globalDef, isProjectKey);
+  const catalogDef = !projectDef && !globalDef
+    ? lookupCatalogVar(key, options?.bundleFilter)
+    : undefined;
+  const def = catalogDef ?? mergeDefinition(key, projectDef, globalDef, isProjectKey);
   const resolved = await resolveVar(ctx, def, options);
 
   const bundleNames = options?.bundleFilter
@@ -223,6 +232,22 @@ export async function resolveForRun(
     throw new Error("No manifest found. Run `ap init --global` or `ap init`.");
   }
 
+  if (options?.bundleFilter) {
+    const bundle = mergeBundleDefinition(
+      options.bundleFilter,
+      ctx.projectManifest,
+      ctx.globalManifest,
+    );
+    if (!bundle) {
+      throw new Error(`Unknown bundle "${options.bundleFilter}" — run: ap catalog`);
+    }
+  }
+
+  const required = requiredRunKeys(ctx, options?.bundleFilter);
+  // Flat manifests (no bundles) still require every declared key.
+  if (!options?.bundleFilter && required.size === 0 && getActiveBundleNames(ctx, false) === null) {
+    for (const key of collectKeys(ctx)) required.add(key);
+  }
   const env: Record<string, string> = {};
   const vars = await resolveAll(ctx, {
     forRun: true,
@@ -232,7 +257,12 @@ export async function resolveForRun(
 
   for (const v of vars) {
     if (v.status === "missing") {
-      throw new Error(`Missing required secret: ${v.key} (${v.set_with})`);
+      // Only fail on keys the selected / active bundles actually need.
+      // Orphan or incomplete standalone vars must not brick unrelated runs.
+      if (required.has(v.key)) {
+        throw new Error(`Missing required secret: ${v.key} (${v.set_with})`);
+      }
+      continue;
     }
     if (v.value !== undefined) env[v.key] = v.value;
   }

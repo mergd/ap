@@ -146,7 +146,7 @@ describe("resolveVar", () => {
 
     const resolved = await resolveVar(ctx, def);
     expect(resolved.status).toBe("missing");
-    expect(resolved.set_with).toBe("ap set NC_API_KEY --global");
+    expect(resolved.set_with).toBe("ap set NC_API_KEY");
   });
 
   test("reads inline secret from manifest", async () => {
@@ -323,5 +323,83 @@ value = "runtime-only"
     const env = await resolveForRun(ctx);
     expect(env.NC_API_USER).toBe("testuser");
     expect(env.STANDALONE_VALUE).toBe("runtime-only");
+  });
+
+  test("catalog fallback resolves project bundles without global [bundle.*]", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ap-catalog-"));
+    const globalDir = join(dir, "global");
+    const prevHome = process.env.AP_GLOBAL_HOME;
+
+    try {
+      process.env.AP_GLOBAL_HOME = globalDir;
+      await mkdir(globalDir, { recursive: true });
+      await mkdir(join(dir, ".ap"), { recursive: true });
+
+      await writeFile(join(dir, "ap.toml"), `version = 1\nbundles = ["cloudflare"]\n`);
+      await writeFile(join(globalDir, "manifest.toml"), `version = 1
+
+[var.CF_GLOBAL_EMAIL]
+visibility = "public"
+value = "user@example.com"
+
+[var.CF_GLOBAL_API_KEY]
+visibility = "secret"
+`);
+      await writeFile(
+        join(globalDir, "secrets.json"),
+        JSON.stringify({ CF_GLOBAL_API_KEY: "key123" }) + "\n",
+      );
+
+      const result = await runDoctor(dir);
+      expect(result.bundles.cloudflare.ready).toBe(true);
+      expect(result.bundles.cloudflare.surfaced).toEqual([
+        { key: "CF_GLOBAL_EMAIL", value: "user@example.com" },
+      ]);
+    } finally {
+      if (prevHome === undefined) delete process.env.AP_GLOBAL_HOME;
+      else process.env.AP_GLOBAL_HOME = prevHome;
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("missing standalone vars do not brick bundled ap run", async () => {
+    const ctx: ResolveContext = {
+      projectRoot: "/tmp",
+      globalManifest: parseManifestContent(`version = 1
+[bundle.namecheap]
+vars = ["NC_API_USER"]
+
+[var.NC_API_USER]
+visibility = "public"
+value = "testuser"
+
+[var.ORPHAN]
+visibility = "secret"
+`, "g"),
+      projectManifest: parseManifestContent("version = 1\nbundles = [\"namecheap\"]\n", "p"),
+      globalSecrets: {},
+      projectSecrets: {},
+    };
+
+    const env = await resolveForRun(ctx, { bundleFilter: "namecheap" });
+    expect(env.NC_API_USER).toBe("testuser");
+    expect(env.ORPHAN).toBeUndefined();
+  });
+
+  test("unknown bundle filter errors on run", async () => {
+    const ctx: ResolveContext = {
+      projectRoot: "/tmp",
+      globalManifest: parseManifestContent("version = 1\n", "g"),
+      projectManifest: parseManifestContent("version = 1\nbundles = []\n", "p"),
+      globalSecrets: {},
+      projectSecrets: {},
+    };
+
+    try {
+      await resolveForRun(ctx, { bundleFilter: "nope" });
+      throw new Error("expected resolveForRun to throw");
+    } catch (err) {
+      expect(err instanceof Error && err.message.includes("Unknown bundle")).toBe(true);
+    }
   });
 });

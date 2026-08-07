@@ -2,7 +2,7 @@ import { globalHome, globalManifestPath, globalSecretsPath } from "./paths.ts";
 import type { AgentGuide } from "./types.ts";
 import { printMachineOutput, type OutputFormat } from "./agent-output.ts";
 
-const GUIDE_VERSION = 2;
+const GUIDE_VERSION = 3;
 
 export function buildAgentGuide(): AgentGuide {
   return {
@@ -11,7 +11,7 @@ export function buildAgentGuide(): AgentGuide {
       { run: "ap show <name> --check" },
       {
         if_not_ready:
-          "show missing[].ask + missing[].set_with — never ask user to paste secrets",
+          "show missing[].ask + missing[].set_with / next",
       },
       {
         if_ready:
@@ -19,15 +19,15 @@ export function buildAgentGuide(): AgentGuide {
       },
     ],
     rules: {
-      never_request_secrets_in_chat: true,
       prefer_bundle: true,
     },
     commands: {
       guide: "ap guide [--human]",
       show: "ap show [BUNDLE] [--check] [--human]",
+      catalog: "ap catalog [--human]",
       run: "ap run [BUNDLE] -- <cmd>",
-      set: 'echo "$KEY" | ap set KEY [--global]',
-      unset: "ap unset KEY [--global]",
+      set: 'echo "$KEY" | ap set KEY',
+      unset: "ap unset KEY",
     },
     paths: {
       global_manifest: globalManifestPath(),
@@ -46,12 +46,12 @@ export function formatGuideHuman(): string {
     "",
     "Workflow:",
     "  1. ap show <name> --check",
-    "  2. If not ready → show missing[].ask + missing[].set_with",
+    "  2. If not ready → show missing[].ask + missing[].set_with (or next)",
     "  3. If ready → use surfaced vars; ap run <name> -- <cmd>",
     "",
-    "Rules: never request secrets in chat; prefer a bundle name",
+    "Rules: prefer a bundle name on show / run",
     "",
-    "Commands: show, run, set, unset",
+    "Commands: show, catalog, run, set, unset",
   ].join("\n");
 }
 

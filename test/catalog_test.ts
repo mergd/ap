@@ -25,9 +25,10 @@ describe("catalog scaffold", () => {
     expect(manifest.bundles.has("cloudflare")).toBe(true);
   });
 
-  test("runtime resolves bundles from manifest only", () => {
+  test("runtime falls back to catalog bundle definitions", () => {
     const bundle = mergeBundleDefinition("cloudflare", null, null);
-    expect(bundle).toBeUndefined();
+    expect(bundle?.vars).toEqual(["CF_GLOBAL_API_KEY", "CF_GLOBAL_EMAIL"]);
+    expect(bundle?.prompt).toContain("X-Auth-Email");
   });
 
   test("runtime resolves scaffolded manifest", () => {

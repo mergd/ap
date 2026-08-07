@@ -113,7 +113,6 @@ export interface AgentGuide {
   version: number;
   workflow: Array<Record<string, string>>;
   rules: {
-    never_request_secrets_in_chat: boolean;
     prefer_bundle: boolean;
   };
   commands: Record<string, string>;

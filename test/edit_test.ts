@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import { expect } from "./expect.ts";
-import { isDetachedEditor, resolveEditScope } from "../src/edit.ts";
+import { isDetachedEditor, parseEditTarget, resolveEditScope } from "../src/edit.ts";
 
 describe("resolveEditScope", () => {
   test("secrets falls back to global without project", () => {
@@ -29,6 +29,16 @@ describe("resolveEditScope", () => {
   test("toml rejects --global", () => {
     const scope = resolveEditScope("toml", true, true);
     expect(scope.error).toContain("project-scoped");
+  });
+});
+
+describe("parseEditTarget", () => {
+  test("accepts global/project aliases", () => {
+    expect(parseEditTarget("global")).toBe("manifest");
+    expect(parseEditTarget("project")).toBe("toml");
+    expect(parseEditTarget("manifest")).toBe("manifest");
+    expect(parseEditTarget("toml")).toBe("toml");
+    expect(parseEditTarget("secrets")).toBe("secrets");
   });
 });
 

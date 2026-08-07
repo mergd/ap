@@ -1,5 +1,6 @@
 import { isFileGitTracked } from "./git.ts";
 import { isSopsEncrypted } from "./encryption/sops.ts";
+import { getCatalogBundle } from "./catalog/bundles.ts";
 import {
   findProjectRoot,
   globalManifestPath,
@@ -51,7 +52,7 @@ export async function validateManifest(
 
   for (const [key, def] of manifest.vars) {
     const scope = def.scope ?? "global";
-    const setHint = scope === "global" ? `ap set ${key} --global` : `ap set ${key}`;
+    const setHint = scope === "project" ? `ap set ${key} --project` : `ap set ${key}`;
 
     validateVarRules(key, def.visibility, {
       value: def.value,
@@ -71,9 +72,11 @@ export async function validateManifest(
 
   if (manifest.activeBundles) {
     for (const name of manifest.activeBundles) {
-      if (!options?.globalManifest?.bundles.has(name)) {
+      const inGlobal = options?.globalManifest?.bundles.has(name);
+      const inCatalog = Boolean(getCatalogBundle(name));
+      if (!inGlobal && !inCatalog) {
         throw new Error(
-          `${source}: bundle "${name}" not in global manifest — run: ap init --global ${name}`,
+          `${source}: unknown bundle "${name}" — run: ap catalog`,
         );
       }
     }
