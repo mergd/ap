@@ -8,12 +8,13 @@ import { generateSkillMarkdown, skillDirs } from "../src/skill-install.ts";
 describe("ap guide", () => {
   test("buildAgentGuide has required fields", () => {
     const guide = buildAgentGuide();
-    expect(guide.version).toBe(3);
+    expect(guide.version).toBe(4);
     expect(guide.workflow.length > 0).toBe(true);
     expect(guide.rules.prefer_bundle).toBe(true);
     expect(guide.commands.show).toContain("ap show");
     expect(guide.commands.catalog).toContain("ap catalog");
     expect(guide.paths.global_manifest).toContain("manifest.toml");
+    expect(guide.paths.global_secrets).toBeUndefined();
   });
 
   test("formatGuideHuman stays succinct", () => {
@@ -24,7 +25,7 @@ describe("ap guide", () => {
 
   test("guide serializes to YAML without tables", () => {
     const yaml = yamlStringify(buildAgentGuide());
-    expect(yaml).toContain("version: 3");
+    expect(yaml).toContain("version: 4");
     expect(yaml).toContain("prefer_bundle: true");
     expect(yaml.includes("never_request_secrets")).toBe(false);
     expect(yaml.includes("| ---")).toBe(false);
@@ -48,9 +49,9 @@ describe("ap show YAML shape", () => {
       },
       vars: [
         { key: "CF_EMAIL", scope: "global", storage: "inline", visibility: "public", status: "set", value: "user@example.com" },
-        { key: "CF_KEY", scope: "global", storage: "global", visibility: "secret", status: "set", masked: true },
-        { key: "OTHER_TOKEN", scope: "global", storage: "global", visibility: "secret", status: "set", value: "must-not-show" },
-        { key: "MISSING_TOKEN", scope: "global", storage: "global", visibility: "secret", status: "missing", set_with: "ap set MISSING_TOKEN" },
+        { key: "CF_KEY", scope: "global", storage: "inline", visibility: "secret", status: "set", masked: true },
+        { key: "OTHER_TOKEN", scope: "global", storage: "inline", visibility: "secret", status: "set", value: "must-not-show" },
+        { key: "MISSING_TOKEN", scope: "global", storage: "inline", visibility: "secret", status: "missing", set_with: "ap set MISSING_TOKEN" },
       ],
     });
 

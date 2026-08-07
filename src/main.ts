@@ -12,7 +12,6 @@ import {
   findProjectRoot,
   globalHome,
   globalManifestPath,
-  globalSecretsPath,
   projectManifestPath,
   projectSecretsPath,
   projectVaultDir,
@@ -20,7 +19,7 @@ import {
 } from "./paths.ts";
 import { runCommand } from "./run.ts";
 import { createVaultStore, readStdinSecret } from "./vault.ts";
-import type { Scope } from "./types.ts";
+import type { Scope, VarDefinition } from "./types.ts";
 import { getPathsInfo, openInEditor, parseEditTarget, resolveEditPath, resolveEditScope } from "./edit.ts";
 import { installSkill } from "./skill-install.ts";
 import { printHelp } from "./help.ts";
@@ -37,7 +36,9 @@ import {
   showToAgentOutput,
   stripOutputFlags,
 } from "./agent-output.ts";
-import { checkForUpdate, formatUpdateNotice } from "./update-check.ts";
+import { checkForUpdate, formatUpdateNotice, readCurrentVersion } from "./update-check.ts";
+import { startUi } from "./ui.ts";
+import { migrateAllStores } from "./migrate.ts";
 
 function usage(): void {
   printHelp();
@@ -49,12 +50,14 @@ function hasGlobalFlag(args: string[]): boolean {
 
 function stripFlags(args: string[]): string[] {
   const result = stripOutputFlags(args);
-  for (const flag of ["--global", "-g", "--project", "--validate", "--check", "--from-env", "--human"]) {
+  for (const flag of ["--global", "-g", "--project", "--validate", "--check", "--from-env", "--human", "--no-open"]) {
     const idx = result.indexOf(flag);
     if (idx >= 0) result.splice(idx, 1);
   }
   const bundleIdx = result.indexOf("--bundle");
   if (bundleIdx >= 0) result.splice(bundleIdx, 2);
+  const portIdx = result.indexOf("--port");
+  if (portIdx >= 0) result.splice(portIdx, 2);
   return result;
 }
 
@@ -81,20 +84,22 @@ function resolveSetScope(args: string[]): Scope {
   return args.includes("--project") ? "project" : "global";
 }
 
+/** Ensure var exists; for project vault sets, also declare storage = "secrets.json". */
 async function ensureVarInManifest(
   key: string,
   scope: Scope,
   projectRoot: string | null,
+  options?: { vaultStorage?: boolean },
 ): Promise<void> {
   if (scope === "global") {
     await ensureDir(globalHome());
     const path = globalManifestPath();
     let manifest = await loadManifest(path);
     if (!manifest) {
-      manifest = emptyManifest();
+      manifest = emptyManifest("global");
     }
     if (!manifest.vars.has(key)) {
-      manifest.vars.set(key, { key, visibility: "secret", scope: "global" });
+      manifest.vars.set(key, { key, visibility: "secret", scope: manifest.scope });
       await saveManifestContent(path, manifest);
     }
     return;
@@ -107,10 +112,62 @@ async function ensureVarInManifest(
     console.error("Error: no ap.toml found. Run `ap init` first.");
     process.exit(1);
   }
-  if (!manifest.vars.has(key)) {
-    manifest.vars.set(key, { key, visibility: "secret", scope: "project" });
+
+  const existing = manifest.vars.get(key);
+  if (!existing) {
+    const def: VarDefinition = {
+      key,
+      visibility: "secret",
+      scope: manifest.scope,
+      ...(options?.vaultStorage ? { storage: "secrets.json" as const } : {}),
+    };
+    manifest.vars.set(key, def);
+    await saveManifestContent(path, manifest);
+    return;
+  }
+
+  if (options?.vaultStorage && existing.storage !== "secrets.json") {
+    if (existing.value !== undefined) {
+      console.error(
+        `Error: ${key} has an inline value — remove it before using storage = "secrets.json"`,
+      );
+      process.exit(1);
+    }
+    existing.storage = "secrets.json";
+    manifest.vars.set(key, existing);
     await saveManifestContent(path, manifest);
   }
+}
+
+async function setGlobalManifestValue(key: string, value: string): Promise<void> {
+  const path = globalManifestPath();
+  let manifest = await loadManifest(path);
+  if (!manifest) {
+    manifest = emptyManifest("global");
+  }
+  const existing = manifest.vars.get(key);
+  const def: VarDefinition = {
+    ...(existing ?? { key, visibility: "secret", scope: "global" }),
+    key,
+    visibility: existing?.visibility ?? "secret",
+    scope: "global",
+    value,
+  };
+  delete def.storage;
+  manifest.vars.set(key, def);
+  await saveManifestContent(path, manifest);
+}
+
+async function unsetGlobalManifestValue(key: string): Promise<boolean> {
+  const path = globalManifestPath();
+  const manifest = await loadManifest(path);
+  if (!manifest) return false;
+  const existing = manifest.vars.get(key);
+  if (!existing || existing.value === undefined) return false;
+  delete existing.value;
+  manifest.vars.set(key, existing);
+  await saveManifestContent(path, manifest);
+  return true;
 }
 
 async function cmdInit(global: boolean, bundleNames: string[]): Promise<void> {
@@ -197,16 +254,19 @@ async function cmdSet(
     process.exit(1);
   }
 
-  await ensureVarInManifest(key, options.scope, projectRoot);
+  if (options.scope === "global") {
+    await ensureDir(globalHome());
+    await setGlobalManifestValue(key, value);
+    console.log(`${options.fromEnv ? "Adopted" : "Set"} ${key} (global)`);
+    return;
+  }
 
-  const secretsPath = options.scope === "global"
-    ? globalSecretsPath()
-    : projectSecretsPath(projectRoot!);
-  const vault = createVaultStore(secretsPath, {
-    projectRoot: options.scope === "global" ? null : projectRoot,
+  await ensureVarInManifest(key, "project", projectRoot, { vaultStorage: true });
+  const vault = createVaultStore(projectSecretsPath(projectRoot!), {
+    projectRoot,
   });
   await vault.set(key, value);
-  console.log(`${options.fromEnv ? "Adopted" : "Set"} ${key} (${options.scope})`);
+  console.log(`${options.fromEnv ? "Adopted" : "Set"} ${key} (project)`);
 }
 
 async function cmdShow(
@@ -235,15 +295,49 @@ async function cmdShow(
 }
 
 async function cmdUnset(key: string, scope: Scope): Promise<void> {
-  const projectRoot = scope === "project" ? await requireProjectRoot() : null;
-  const secretsPath = scope === "global" ? globalSecretsPath() : projectSecretsPath(projectRoot!);
-  const vault = createVaultStore(secretsPath, { projectRoot });
+  if (scope === "global") {
+    const removed = await unsetGlobalManifestValue(key);
+    if (!removed) {
+      console.error(`Error: ${key} has no inline value in global manifest`);
+      process.exit(1);
+    }
+    console.log(`Unset ${key} (global)`);
+    return;
+  }
+
+  const projectRoot = await requireProjectRoot();
+  const vault = createVaultStore(projectSecretsPath(projectRoot), { projectRoot });
   const removed = await vault.unset(key);
   if (!removed) {
-    console.error(`Error: ${key} not in vault`);
+    console.error(`Error: ${key} not in project secrets.json`);
     process.exit(1);
   }
-  console.log(`Unset ${key} (${scope})`);
+  console.log(`Unset ${key} (project)`);
+}
+
+async function cmdMigrate(): Promise<void> {
+  const results = await migrateAllStores(await findProjectRoot());
+  let total = 0;
+  for (const r of results) {
+    if (r.migrated.length === 0 && r.annotated.length === 0 && !r.deletedSecretsJson) {
+      continue;
+    }
+    console.log(r.manifestPath);
+    if (r.migrated.length > 0) {
+      console.log(`  moved to TOML: ${r.migrated.join(", ")}`);
+      total += r.migrated.length;
+    }
+    if (r.annotated.length > 0) {
+      console.log(`  storage = "secrets.json": ${r.annotated.join(", ")}`);
+      total += r.annotated.length;
+    }
+    if (r.deletedSecretsJson) {
+      console.log(`  deleted ${r.deletedSecretsJson}`);
+    }
+  }
+  if (total === 0 && !results.some((r) => r.deletedSecretsJson)) {
+    console.log("Nothing to migrate");
+  }
 }
 
 async function cmdRun(cmd: string[], bundleFilter?: string): Promise<void> {
@@ -279,10 +373,6 @@ async function cmdEdit(rest: string[], globalFlag: boolean): Promise<void> {
     process.exit(1);
   }
 
-  if (scope.fallbackToGlobal) {
-    console.error("No project ap.toml; editing global secrets.");
-  }
-
   const path = resolveEditPath(target, scope.useGlobal, await getPathsInfo());
 
   console.error(`Editing ${path}`);
@@ -306,6 +396,11 @@ async function cmdSkillInstall(project: boolean): Promise<void> {
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
+
+  if (args.includes("--version") || args.includes("-V")) {
+    console.log(await readCurrentVersion());
+    return;
+  }
 
   if (args.length === 0 || args.includes("-h") || args.includes("--help")) {
     usage();
@@ -411,6 +506,26 @@ async function main(): Promise<void> {
       case "setup":
         await cmdSetup();
         break;
+      case "migrate":
+        await cmdMigrate();
+        break;
+      case "ui": {
+        const portRaw = (() => {
+          const idx = args.indexOf("--port");
+          return idx >= 0 ? args[idx + 1] : undefined;
+        })();
+        const port = portRaw !== undefined ? Number(portRaw) : undefined;
+        if (portRaw !== undefined && (!Number.isInteger(port) || port! <= 0 || port! > 65535)) {
+          console.error("Error: --port must be an integer 1–65535");
+          process.exit(1);
+        }
+        await startUi({
+          global: hasGlobalFlag(args),
+          port,
+          open: !args.includes("--no-open"),
+        });
+        break;
+      }
       default:
         console.error(`Unknown command: ${cmd}`);
         usage();

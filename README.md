@@ -1,6 +1,6 @@
 # ap
 
-Agent-portable local secrets. Declare **bundles** of credentials in committed manifests, store secret values in gitignored vaults, and let agents check readiness with `ap show <bundle> --check` before calling external APIs.
+Agent-portable local secrets. Declare **bundles** of credentials in committed manifests, store global secret values inline in TOML, and opt project secrets into `.ap/secrets.json` explicitly. Agents check readiness with `ap show <bundle> --check` before calling external APIs.
 
 ## Install
 
@@ -35,9 +35,12 @@ ap init
 eval "$(op signin)"
 ap setup                        # SOPS + 1Password — safe to commit .ap/secrets.json
 
-# Set secrets (global by default)
+# Set secrets (global by default → value= in manifest.toml)
 echo "$NC_API_KEY" | ap set NC_API_KEY
 echo "$KEY" | ap set CF_GLOBAL_API_KEY
+
+# Project vault (declares storage = "secrets.json" automatically)
+echo "$TOKEN" | ap set DEPLOY_TOKEN --project
 
 # Inspect secrets and check readiness
 ap show --check
@@ -46,6 +49,8 @@ ap show cloudflare --check
 # Run commands with secrets injected
 ap run cloudflare -- curl ...
 ```
+
+If you still have a legacy `~/.config/ap/secrets.json`, run `ap migrate`.
 
 Install the agent skill (Cursor, Claude Code, Codex):
 
@@ -60,12 +65,24 @@ ap skill install --project    # same paths under current repo
 
 | File | Purpose |
 |------|---------|
-| `~/.config/ap/manifest.toml` | Global bundle definitions, public vars, ask text |
-| `~/.config/ap/secrets.json` | Global secret values |
-| `ap.toml` | Which bundles this repo uses (optional) |
-| `.ap/secrets.json` | Project secrets — SOPS-encrypted after `ap setup` (safe to commit) |
+| `~/.config/ap/manifest.toml` | Global bundles, public vars, **and secret values** (`value =`) |
+| `ap.toml` | Which bundles this repo uses; project vars; optional `storage = "secrets.json"` |
+| `.ap/secrets.json` | Project vault — only when a var declares `storage = "secrets.json"` (SOPS after `ap setup`) |
 | `.sops.yaml` | SOPS encryption rules (committed after `ap setup`) |
 | `.ap/config.toml` | 1Password vault/item for age key (committed) |
+
+There is **no** global `secrets.json`. Project vault use is never implied by scope — declare it:
+
+```toml
+# ap.toml
+version = 1
+scope = "project"
+
+[var.DEPLOY_TOKEN]
+visibility = "secret"
+storage = "secrets.json"
+ask = "Deploy token for this repo"
+```
 
 Project secrets use **SOPS + age** with the private key in **1Password** (same pattern as [lockbox](https://github.com/mergd/lockbox)). Run `ap setup` once per repo; teammates need `op` access to decrypt.
 
@@ -80,19 +97,24 @@ ap help               # full command reference
 ## Commands
 
 ```
+ap -V, --version                 Print version
 ap guide [--human]               Agent contract (primary entrypoint for agents)
 ap show [BUNDLE] [-g] [--check] [--validate]
 ap catalog
 ap set KEY [-g|--project] [--from-env]
 ap unset KEY [-g|--project]
+ap migrate                       Legacy secrets.json → TOML-first
 ap run [BUNDLE] -- <cmd...>
 ap init [-g|--global] [BUNDLE...]
 ap setup
-ap edit <secrets|global|project> [-g]
+ap edit <secrets|global|project>
+ap ui [-g|--global] [--port N] [--no-open]
 ap skill install [--project]
 ```
 
-`-g` is short for `--global`. `ap set` / `ap unset` default to the global vault; use `--project` for the repo vault.
+`-g` is short for `--global`. `ap set` defaults to writing `value` in the global manifest; use `--project` for the repo vault (`storage = "secrets.json"`).
+
+`ap ui` opens a local Bootstrap-era page on `127.0.0.1` to edit project `ap.toml` (or `-g` for `manifest.toml`, including global secret values).
 
 Output is human-readable in a terminal and YAML when piped. Catalog bundles: `cloudflare`, `namecheap`, `openrouter`.
 

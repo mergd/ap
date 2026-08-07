@@ -46,7 +46,7 @@ export function isNewerVersion(latest: string, current: string): boolean {
   return false;
 }
 
-async function readCurrentVersion(): Promise<string> {
+export async function readCurrentVersion(): Promise<string> {
   const packagePath = fileURLToPath(new URL("../package.json", import.meta.url));
   const pkg = JSON.parse(await readFile(packagePath, "utf8")) as { version?: unknown };
   if (typeof pkg.version !== "string") throw new Error("package version missing");

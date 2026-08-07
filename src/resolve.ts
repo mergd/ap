@@ -2,7 +2,6 @@ import { resolveDerive } from "./derives.ts";
 import { truncateForDisplay } from "./mask.ts";
 import {
   globalManifestPath,
-  globalSecretsPath,
   projectManifestPath,
   projectSecretsPath,
 } from "./paths.ts";
@@ -16,6 +15,7 @@ import {
   requiredRunKeys,
 } from "./bundles.ts";
 import type {
+  Manifest,
   ResolvedVar,
   ResolveContext,
   ResolveOptions,
@@ -23,26 +23,34 @@ import type {
   Storage,
   VarDefinition,
   VarStatus,
-  Visibility,
 } from "./types.ts";
 
 export type { ResolveContext, ResolveOptions };
+
+function manifestUsesVault(manifest: Manifest | null): boolean {
+  if (!manifest) return false;
+  for (const def of manifest.vars.values()) {
+    if (def.storage === "secrets.json") return true;
+  }
+  return false;
+}
 
 export async function loadResolveContext(projectRoot?: string | null): Promise<ResolveContext> {
   const root = projectRoot === undefined ? null : projectRoot;
   const globalManifest = await loadManifest(globalManifestPath());
   const projectManifest = root ? await loadManifest(projectManifestPath(root)) : null;
-  const globalVault = createVaultStore(globalSecretsPath());
-  const projectVault = root
-    ? createVaultStore(projectSecretsPath(root), { projectRoot: root })
-    : null;
+
+  let projectSecrets: Record<string, string> = {};
+  if (root && (manifestUsesVault(projectManifest) || manifestUsesVault(globalManifest))) {
+    const vault = createVaultStore(projectSecretsPath(root), { projectRoot: root });
+    projectSecrets = await vault.read();
+  }
 
   return {
     projectRoot: root,
     globalManifest,
     projectManifest,
-    globalSecrets: await globalVault.read(),
-    projectSecrets: projectVault ? await projectVault.read() : {},
+    projectSecrets,
   };
 }
 
@@ -62,6 +70,7 @@ export function mergeDefinition(
     key,
     visibility: projectDef?.visibility ?? globalDef?.visibility ?? "secret",
     scope,
+    storage: projectDef?.storage ?? globalDef?.storage,
     value: projectDef?.value ?? globalDef?.value,
     ask: projectDef?.ask ?? globalDef?.ask,
     docs: projectDef?.docs ?? globalDef?.docs,
@@ -83,7 +92,7 @@ export async function resolveVar(
   const surfacePublic = options?.surfacePublic ?? false;
   const scope = def.scope ?? "global";
 
-  let storage: Storage;
+  let storage: Storage = "inline";
   let value: string | undefined;
   let status: VarStatus = "missing";
 
@@ -100,29 +109,21 @@ export async function resolveVar(
     value = def.value;
     status = "set";
   } else if (def.visibility === "secret") {
-    const vaultValue =
-      scope === "project" ? ctx.projectSecrets[def.key] : ctx.globalSecrets[def.key];
-
-    if (vaultValue !== undefined) {
-      storage = scope === "project" ? "project" : "global";
-      value = vaultValue;
-      status = "set";
+    if (def.storage === "secrets.json") {
+      storage = "secrets.json";
+      value = ctx.projectSecrets[def.key];
+      status = value !== undefined ? "set" : "missing";
     } else if (def.value !== undefined) {
       storage = "inline";
       value = def.value;
       status = "set";
     } else {
-      storage = scope === "project" ? "project" : "global";
+      storage = "inline";
       status = "missing";
     }
-  } else if (scope === "project") {
-    storage = "project";
-    value = ctx.projectSecrets[def.key];
-    status = value !== undefined ? "set" : "missing";
   } else {
-    storage = "global";
-    value = ctx.globalSecrets[def.key];
-    status = value !== undefined ? "set" : "missing";
+    storage = "inline";
+    status = "missing";
   }
 
   const resolved: ResolvedVar = {
