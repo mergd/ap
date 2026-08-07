@@ -57,35 +57,31 @@ New repo: **`ap`** — Bun CLI, single binary, zero platform deps.
 ```text
 # Machine-wide (set once, use in every repo)
 ~/.config/ap/
-  manifest.toml     # global key definitions (ask text, visibility)
-  secrets.json      # global secret values — mode 0600
+  manifest.toml     # global key definitions + secret values (value =) — mode 0600 when secrets present
 
-# Per-project (committed contract + gitignored values)
-<repo>/ap.toml   # which keys this repo needs; scope per key
+# Per-project (committed contract + explicit vault opt-in)
+<repo>/ap.toml      # scope = "project"; bundles; vars; storage = "secrets.json" when using vault
 <repo>/.ap/
-  secrets.json      # project-only values — mode 0600, gitignored
+  secrets.json      # only when a var declares storage = "secrets.json" — SOPS after ap setup
 ```
 
 Use XDG `~/.config/ap/` (override via `AP_GLOBAL_HOME`). Project discovery: walk up from `cwd` to find `ap.toml` (same pattern as git root).
 
-### Scope model
+### Storage model
 
-Each var in a project `ap.toml` declares where its **value** lives:
+| Location | How values are stored |
+|----------|------------------------|
+| Global | Inline `value = "..."` in `manifest.toml` (no `secrets.json`) |
+| Project vault | Declare `storage = "secrets.json"` on the var, then `ap set KEY --project` |
+| Project inline | `value = "..."` only when `ap.toml` is not git-tracked |
 
-| `scope` | Value store | Typical use |
-|---------|-------------|-------------|
-| `global` (default for shared keys) | `~/.config/ap/secrets.json` | Namecheap API, personal CF token, npm publish token |
-| `project` (default for repo keys) | `<repo>/.ap/secrets.json` | `DEPLOY_TOKEN` for this repo, repo-specific DB override |
+**Resolution for secrets:**
 
-**Resolution precedence** (same key name):
+1. If `storage = "secrets.json"` → project `.ap/secrets.json`
+2. Else if inline `value` → TOML
+3. Else → missing
 
-1. Project vault value (if `scope = "project"`)
-2. Global vault value (if `scope = "global"`)
-3. Inline `value` in manifest (public only)
-4. `derive` resolver
-
-Project **overrides** global metadata (`ask`, `used_by`) but not the storage location unless you re-declare `scope`.
-
+`scope` is file-level (`scope = "global" | "project"` at the top of the manifest) and no longer implies a vault.
 ### Manifest formats
 
 **Global** (`~/.config/ap/manifest.toml`) — canonical definitions for machine-wide creds:

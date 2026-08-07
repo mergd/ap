@@ -1,8 +1,8 @@
-import { globalHome, globalManifestPath, globalSecretsPath } from "./paths.ts";
+import { globalHome, globalManifestPath } from "./paths.ts";
 import type { AgentGuide } from "./types.ts";
 import { printMachineOutput, type OutputFormat } from "./agent-output.ts";
 
-const GUIDE_VERSION = 3;
+const GUIDE_VERSION = 4;
 
 export function buildAgentGuide(): AgentGuide {
   return {
@@ -28,12 +28,12 @@ export function buildAgentGuide(): AgentGuide {
       run: "ap run [BUNDLE] -- <cmd>",
       set: 'echo "$KEY" | ap set KEY',
       unset: "ap unset KEY",
+      migrate: "ap migrate",
     },
     paths: {
       global_manifest: globalManifestPath(),
-      global_secrets: globalSecretsPath(),
       project_toml: "ap.toml",
-      project_secrets: ".ap/secrets.json",
+      project_secrets: '.ap/secrets.json (only when var has storage = "secrets.json")',
       project_encryption: ".sops.yaml + .ap/config.toml (run ap setup)",
       global_home: globalHome(),
     },
@@ -51,7 +51,7 @@ export function formatGuideHuman(): string {
     "",
     "Rules: prefer a bundle name on show / run",
     "",
-    "Commands: show, catalog, run, set, unset",
+    "Commands: show, catalog, run, set, unset, migrate",
   ].join("\n");
 }
 

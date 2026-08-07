@@ -4,11 +4,12 @@ import { getCatalogBundle } from "./catalog/bundles.ts";
 import {
   findProjectRoot,
   globalManifestPath,
+  globalSecretsPath,
   projectManifestPath,
   projectSecretsPath,
 } from "./paths.ts";
 import { loadManifest } from "./manifest.ts";
-import { isNotFound, readTextFile } from "./fs-helpers.ts";
+import { isNotFound, pathExists, readTextFile } from "./fs-helpers.ts";
 import type { Manifest, ValidateReport, Visibility } from "./types.ts";
 
 export interface ValidateVarContext {
@@ -16,6 +17,9 @@ export interface ValidateVarContext {
   gitTracked?: boolean;
   /** Shown in error messages (e.g. ap set KEY --global). */
   setHint?: string;
+  /** File-level scope of the manifest being validated. */
+  fileScope?: "global" | "project";
+  storage?: "secrets.json";
 }
 
 export function validateVarRules(
@@ -23,12 +27,24 @@ export function validateVarRules(
   visibility: Visibility,
   options: { value?: string; derive?: string } & ValidateVarContext,
 ): void {
-  const { value, derive, gitTracked, setHint } = options;
+  const { value, derive, gitTracked, setHint, fileScope, storage } = options;
+
+  if (storage === "secrets.json") {
+    if (visibility !== "secret") {
+      throw new Error(`${key}: storage = "secrets.json" requires visibility = "secret"`);
+    }
+    if (value !== undefined) {
+      throw new Error(`${key}: use either value or storage = "secrets.json", not both`);
+    }
+    if (fileScope === "global") {
+      throw new Error(`${key}: storage = "secrets.json" requires scope = "project"`);
+    }
+  }
 
   if (visibility === "secret" && value !== undefined && gitTracked) {
     const hint = setHint ?? `ap set ${key}`;
     throw new Error(
-      `${key}: secret value in a git-tracked manifest — use vault instead (${hint})`,
+      `${key}: secret value in a git-tracked manifest — use storage = "secrets.json" (${hint})`,
     );
   }
 
@@ -51,7 +67,7 @@ export async function validateManifest(
   const gitTracked = options?.gitTracked ?? (await isFileGitTracked(source));
 
   for (const [key, def] of manifest.vars) {
-    const scope = def.scope ?? "global";
+    const scope = def.scope ?? manifest.scope;
     const setHint = scope === "project" ? `ap set ${key} --project` : `ap set ${key}`;
 
     validateVarRules(key, def.visibility, {
@@ -59,6 +75,8 @@ export async function validateManifest(
       derive: def.derive,
       gitTracked,
       setHint,
+      fileScope: manifest.scope,
+      storage: def.storage,
     });
   }
 
@@ -110,7 +128,7 @@ async function validateManifestFile(
     for (const [, def] of manifest.vars) {
       if (def.visibility === "secret" && def.value !== undefined && !gitTracked) {
         report.warnings.push(
-          `${def.key}: inline secret — keep this file out of git or move to secrets.json`,
+          `${def.key}: inline secret — keep this file out of git or use storage = "secrets.json"`,
         );
       }
     }
@@ -122,6 +140,20 @@ async function validateManifestFile(
   return report;
 }
 
+async function validateLegacyGlobalSecrets(): Promise<ValidateReport | null> {
+  const path = globalSecretsPath();
+  if (!(await pathExists(path))) return null;
+
+  return {
+    ok: false,
+    path,
+    errors: [
+      'legacy global secrets.json — run: ap migrate (moves values into manifest.toml and deletes this file)',
+    ],
+    warnings: [],
+  };
+}
+
 export async function runValidate(projectRoot?: string | null): Promise<ValidateReport[]> {
   const reports: ValidateReport[] = [];
 
@@ -129,22 +161,40 @@ export async function runValidate(projectRoot?: string | null): Promise<Validate
     await validateManifestFile(globalManifestPath(), { requireBundleVarDefs: true }),
   );
 
+  const legacy = await validateLegacyGlobalSecrets();
+  if (legacy) reports.push(legacy);
+
   const root = projectRoot === undefined ? await findProjectRoot() : projectRoot;
   if (root) {
     reports.push(await validateManifestFile(projectManifestPath(root)));
-    reports.push(await validateProjectSecrets(root));
+    const projectManifest = await loadManifest(projectManifestPath(root));
+    const usesVault = projectManifest
+      ? [...projectManifest.vars.values()].some((v) => v.storage === "secrets.json")
+      : false;
+    if (usesVault || (await pathExists(projectSecretsPath(root)))) {
+      reports.push(await validateProjectSecrets(root, usesVault));
+    }
   }
 
   return reports;
 }
 
-async function validateProjectSecrets(projectRoot: string): Promise<ValidateReport> {
+async function validateProjectSecrets(
+  projectRoot: string,
+  declaredInManifest: boolean,
+): Promise<ValidateReport> {
   const path = projectSecretsPath(projectRoot);
   const report: ValidateReport = { ok: true, path, errors: [], warnings: [] };
 
   try {
     const content = await readTextFile(path);
     const tracked = await isFileGitTracked(path);
+
+    if (!declaredInManifest) {
+      report.warnings.push(
+        'secrets.json present but no var declares storage = "secrets.json" — run: ap migrate',
+      );
+    }
 
     if (tracked && !isSopsEncrypted(content)) {
       report.ok = false;
@@ -156,6 +206,8 @@ async function validateProjectSecrets(projectRoot: string): Promise<ValidateRepo
     if (!isNotFound(err)) {
       report.ok = false;
       report.errors.push(err instanceof Error ? err.message : String(err));
+    } else if (declaredInManifest) {
+      report.warnings.push('missing secrets.json — run: ap set KEY --project');
     }
   }
 

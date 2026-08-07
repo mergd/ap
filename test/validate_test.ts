@@ -40,4 +40,25 @@ describe("validateVarRules", () => {
       }),
     ).toThrow(/derive requires visibility = "public"/);
   });
+
+  test("rejects storage on global file scope", () => {
+    expect(() =>
+      validateVarRules("DEPLOY_TOKEN", "secret", {
+        storage: "secrets.json",
+        fileScope: "global",
+        gitTracked: false,
+      }),
+    ).toThrow(/requires scope = "project"/);
+  });
+
+  test("rejects value and storage together", () => {
+    expect(() =>
+      validateVarRules("DEPLOY_TOKEN", "secret", {
+        value: "abc",
+        storage: "secrets.json",
+        fileScope: "project",
+        gitTracked: false,
+      }),
+    ).toThrow(/value or storage/);
+  });
 });

@@ -37,14 +37,31 @@ const topics: Record<string, string> = {
 
   ap edit <secrets|global|project> [-g|--global]
 
-  secrets   secret values (JSON); falls back to global if no ap.toml
-  global    ~/.config/ap/manifest.toml (alias: manifest)
+  secrets   project .ap/secrets.json (requires storage = "secrets.json" on vars)
+  global    ~/.config/ap/manifest.toml (alias: manifest) — includes secret values
   project   repo ap.toml (alias: toml)
 
   Examples:
     ap edit secrets
     ap edit global
     ap edit project`,
+
+  ui: `ap ui — edit TOML in a local browser UI
+
+  ap ui [-g|--global] [--port N] [--no-open]
+
+  Serves a no-frills editor on 127.0.0.1 (Bootstrap 3 vibes).
+  Default: project ap.toml
+  -g / --global   edit ~/.config/ap/manifest.toml (global secrets live here as value =)
+  --port N        listen port (default 4789)
+  --no-open       print URL only (don't open browser)
+
+  Project vault values: declare storage = "secrets.json", then ap edit secrets / ap set --project.
+
+  Examples:
+    ap ui
+    ap ui -g
+    ap ui --global --port 8080 --no-open`,
 
   run: `ap run — inject secrets and run a command
 
@@ -60,7 +77,8 @@ const topics: Record<string, string> = {
 
   set: `ap set — store a secret (global by default)
 
-  ap set KEY [--project]              stdin → vault
+  ap set KEY                          stdin → value in ~/.config/ap/manifest.toml
+  ap set KEY --project                stdin → .ap/secrets.json (+ storage = "secrets.json")
   ap set KEY --from-env [--project]   copy from process.env
   ap set KEY -g|--global              same as default (explicit)
 
@@ -73,9 +91,22 @@ const topics: Record<string, string> = {
 
   ap unset KEY [--project]
 
+  Global: clears value in manifest.toml.
+  Project: removes key from .ap/secrets.json.
+
   Examples:
     ap unset NC_API_KEY
     ap unset DEPLOY_TOKEN --project`,
+
+  migrate: `ap migrate — move legacy vaults into TOML-first layout
+
+  ap migrate
+
+  Global: ~/.config/ap/secrets.json values → manifest.toml value =, then delete JSON.
+  Project: annotate vault-backed vars with storage = "secrets.json".
+
+  Examples:
+    ap migrate`,
 
   setup: `ap setup — enable SOPS encryption via 1Password
 
@@ -123,16 +154,19 @@ function mainHelp(): string {
 
 Usage:
   ap help [topic]                  Per-command help
+  ap -V, --version                 Print version
 
   ap guide [--human]               Agent contract
   ap show [BUNDLE] [--check]       Readiness (YAML default)
   ap catalog                       Built-in bundle templates
   ap set KEY [--project] [--from-env]
   ap unset KEY [--project]
+  ap migrate                       Legacy secrets.json → TOML-first
   ap run [BUNDLE] -- <cmd...>
   ap init [-g|--global] [BUNDLE...]
   ap setup                         Encrypt project secrets (SOPS + 1Password)
   ap edit <secrets|global|project>
+  ap ui [-g|--global] [--port N] [--no-open]
   ap skill install [--project]
 
 Topics: ${Object.keys(topics).join(", ")}

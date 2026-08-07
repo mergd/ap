@@ -1,5 +1,5 @@
 import { describe, test } from "node:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { expect } from "./expect.ts";
@@ -7,9 +7,17 @@ import {
   checkForUpdate,
   formatUpdateNotice,
   isNewerVersion,
+  readCurrentVersion,
 } from "../src/update-check.ts";
 
 describe("update check", () => {
+  test("reads package.json version", async () => {
+    const pkg = JSON.parse(await readFile(join(import.meta.dirname, "../package.json"), "utf8")) as {
+      version: string;
+    };
+    expect(await readCurrentVersion()).toBe(pkg.version);
+  });
+
   test("compares stable semantic versions", () => {
     expect(isNewerVersion("0.3.1", "0.3.0")).toBe(true);
     expect(isNewerVersion("0.10.0", "0.9.9")).toBe(true);

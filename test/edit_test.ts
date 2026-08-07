@@ -3,18 +3,19 @@ import { expect } from "./expect.ts";
 import { isDetachedEditor, parseEditTarget, resolveEditScope } from "../src/edit.ts";
 
 describe("resolveEditScope", () => {
-  test("secrets falls back to global without project", () => {
+  test("secrets requires project", () => {
     const scope = resolveEditScope("secrets", false, false);
-    expect(scope.useGlobal).toBe(true);
-    expect(scope.fallbackToGlobal).toBe(true);
+    expect(scope.error).toContain("ap init");
+    expect(scope.useGlobal).toBe(false);
   });
 
   test("secrets uses project when available", () => {
     expect(resolveEditScope("secrets", false, true)).toEqual({ useGlobal: false });
   });
 
-  test("secrets --global uses global even with project", () => {
-    expect(resolveEditScope("secrets", true, true)).toEqual({ useGlobal: true });
+  test("secrets --global is rejected", () => {
+    const scope = resolveEditScope("secrets", true, true);
+    expect(scope.error).toContain("project-only");
   });
 
   test("manifest is always global", () => {

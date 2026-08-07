@@ -4,12 +4,17 @@
   "title": "ap manifest",
   "description": "Agent-portable secrets manifest (project ap.toml or global manifest.toml)",
   "type": "object",
-  "required": ["version"],
+  "required": ["version", "scope"],
   "properties": {
     "version": {
       "type": "integer",
       "const": 1,
       "description": "Schema version"
+    },
+    "scope": {
+      "type": "string",
+      "enum": ["global", "project"],
+      "description": "Where vars defined in this file are stored (declared once; not per-var)"
     },
     "bundles": {
       "type": "array",
@@ -26,14 +31,14 @@
           "enum": ["public", "secret"],
           "default": "secret"
         },
-        "scope": {
+        "storage": {
           "type": "string",
-          "enum": ["global", "project"],
-          "description": "Where the value is stored (project manifests only)"
+          "enum": ["secrets.json"],
+          "description": "Value lives in .ap/secrets.json (project vault; mutually exclusive with value)"
         },
         "value": {
           "type": "string",
-          "description": "Static inline value (public visibility, mutually exclusive with derive)"
+          "description": "Inline value in TOML (public or secret; mutually exclusive with derive and storage)"
         },
         "ask": {
           "type": "string",

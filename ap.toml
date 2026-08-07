@@ -1,4 +1,5 @@
 version = 1
+scope = "project"
 
 # Opt into catalog / global bundles (definitions fall back to built-in catalog)
 bundles = ["namecheap", "cloudflare"]

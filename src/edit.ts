@@ -6,7 +6,6 @@ import {
   findProjectRoot,
   globalHome,
   globalManifestPath,
-  globalSecretsPath,
   projectManifestPath,
   projectSecretsPath,
 } from "./paths.ts";
@@ -16,7 +15,6 @@ import { spawnAsync } from "./spawn.ts";
 export interface ApPathsInfo {
   global_home: string;
   global_manifest: string;
-  global_secrets: string;
   project: string | null;
   project_manifest: string | null;
   project_secrets: string | null;
@@ -27,7 +25,6 @@ export async function getPathsInfo(): Promise<ApPathsInfo> {
   return {
     global_home: globalHome(),
     global_manifest: globalManifestPath(),
-    global_secrets: globalSecretsPath(),
     project,
     project_manifest: project ? projectManifestPath(project) : null,
     project_secrets: project ? projectSecretsPath(project) : null,
@@ -48,9 +45,15 @@ export function resolveEditScope(
   target: EditTarget,
   globalFlag: boolean,
   hasProject: boolean,
-): { useGlobal: boolean; fallbackToGlobal?: boolean; error?: string } {
+): { useGlobal: boolean; error?: string } {
   if (target === "toml" && globalFlag) {
     return { useGlobal: false, error: "project is always project-scoped (omit -g/--global)" };
+  }
+  if (target === "secrets" && globalFlag) {
+    return {
+      useGlobal: false,
+      error: "secrets is project-only (.ap/secrets.json); use `ap edit global` for global values",
+    };
   }
   if (target === "manifest") {
     return { useGlobal: true };
@@ -61,10 +64,11 @@ export function resolveEditScope(
     }
     return { useGlobal: false };
   }
-  if (globalFlag || !hasProject) {
+  // secrets — project vault only
+  if (!hasProject) {
     return {
-      useGlobal: true,
-      ...(!globalFlag && !hasProject ? { fallbackToGlobal: true as const } : {}),
+      useGlobal: false,
+      error: "no ap.toml found. Run `ap init` first. Global secrets live in `ap edit global`.",
     };
   }
   return { useGlobal: false };
@@ -72,12 +76,11 @@ export function resolveEditScope(
 
 export function resolveEditPath(
   target: EditTarget,
-  global: boolean,
+  _global: boolean,
   info: ApPathsInfo,
 ): string {
   switch (target) {
     case "secrets":
-      if (global) return info.global_secrets;
       if (!info.project_secrets) {
         throw new Error("No project ap.toml found. Run `ap init` first.");
       }
@@ -89,6 +92,10 @@ export function resolveEditPath(
         throw new Error("No project ap.toml found. Run `ap init` first.");
       }
       return info.project_manifest;
+    default: {
+      const _exhaustive: never = target;
+      return _exhaustive;
+    }
   }
 }
 
@@ -103,11 +110,11 @@ async function seedFile(path: string, target: EditTarget): Promise<void> {
   }
 
   if (target === "manifest") {
-    await writeTextFile(path, "version = 1\n\n");
+    await writeTextFile(path, 'version = 1\nscope = "global"\n\n');
     return;
   }
 
-  await writeTextFile(path, "version = 1\n\nbundles = []\n");
+  await writeTextFile(path, 'version = 1\nscope = "project"\n\nbundles = []\n');
 }
 
 function shellQuote(value: string): string {

@@ -1,6 +1,9 @@
 export type Visibility = "public" | "secret";
 export type Scope = "global" | "project";
-export type Storage = "global" | "project" | "inline";
+/** Where the resolved value lives. `secrets.json` is project vault only (explicit opt-in). */
+export type Storage = "inline" | "secrets.json";
+/** Manifest field: declare that the value lives in `.ap/secrets.json`. */
+export type ManifestStorage = "secrets.json";
 export type VarStatus = "set" | "missing";
 
 export type DeriveKind = "public-ipv4";
@@ -8,7 +11,10 @@ export type DeriveKind = "public-ipv4";
 export interface VarDefinition {
   key: string;
   visibility: Visibility;
+  /** Effective storage scope — inherited from the file-level manifest scope. */
   scope?: Scope;
+  /** Explicit project vault; mutually exclusive with inline `value`. */
+  storage?: ManifestStorage;
   value?: string;
   ask?: string;
   docs?: string;
@@ -26,6 +32,8 @@ export interface BundleDefinition {
 
 export interface Manifest {
   version: number;
+  /** Where vars defined in this file are stored. Declared once at the top of the TOML. */
+  scope: Scope;
   vars: Map<string, VarDefinition>;
   bundles: Map<string, BundleDefinition>;
   /** Project manifest: which bundles this repo uses */
@@ -90,7 +98,7 @@ export interface ResolveContext {
   projectRoot: string | null;
   globalManifest: Manifest | null;
   projectManifest: Manifest | null;
-  globalSecrets: Record<string, string>;
+  /** Project `.ap/secrets.json` — only loaded when a var declares storage = "secrets.json". */
   projectSecrets: Record<string, string>;
 }
 

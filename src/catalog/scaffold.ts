@@ -22,7 +22,7 @@ export function resolveCatalogBundleNames(requested: string[]): string[] {
 
 /** Starter manifest copied from catalog templates. */
 export function buildManifestFromCatalog(bundleNames: string[]): Manifest {
-  const manifest = emptyManifest();
+  const manifest = emptyManifest("global");
 
   for (const name of resolveCatalogBundleNames(bundleNames)) {
     mergeCatalogBundles(manifest, [name]);
@@ -58,7 +58,7 @@ export function mergeCatalogBundles(manifest: Manifest, bundleNames: string[]): 
 
     const entry = getCatalogBundle(name)!;
     for (const [key, varDef] of Object.entries(entry.vars)) {
-      const incoming = catalogVarToDefinition(key, varDef);
+      const incoming = { ...catalogVarToDefinition(key, varDef), scope: manifest.scope };
       const existing = manifest.vars.get(key);
       manifest.vars.set(key, existing ? mergeVarDefinition(existing, incoming) : incoming);
     }
