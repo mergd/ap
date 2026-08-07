@@ -109,7 +109,7 @@ export function buildUiHtml(opts: {
       <form class="navbar-form navbar-right navbar-actions" onsubmit="return false;">
         <span id="dirty-badge" class="label label-warning">Unsaved</span>
         <button type="button" class="btn btn-default btn-sm" id="discard" disabled>Discard</button>
-        <button type="button" class="btn btn-primary btn-sm" id="save">
+        <button type="button" class="btn btn-primary btn-sm" id="save" disabled>
           <span class="glyphicon glyphicon-floppy-disk" aria-hidden="true"></span> Save
         </button>
       </form>
@@ -171,8 +171,10 @@ export function buildUiHtml(opts: {
       dirty = !!on;
       var badge = el("dirty-badge");
       var discard = el("discard");
+      var save = el("save");
       if (badge) badge.classList.toggle("is-dirty", dirty);
       if (discard) discard.disabled = !dirty;
+      if (save) save.disabled = !dirty;
       document.title = (dirty ? "• " : "") + "ap ui — ${label}";
     }
 
@@ -373,15 +375,18 @@ export function buildUiHtml(opts: {
         ? '<div class="col-sm-3">' + field("Storage", select("storage", v.storage || "", ["", "secrets.json"])) + "</div>"
         : "";
       var deriveCol = MODE === "project" ? "col-sm-2" : "col-sm-3";
+      var removeCol = opts.hideRemove
+        ? ""
+        : '<div class="col-sm-2 text-right" style="padding-top:22px">' +
+            '<button type="button" class="btn btn-danger btn-xs" data-remove-var="' + idx + '">Remove</button>' +
+          "</div>";
       return '<div class="var-row" data-var-idx="' + idx + '">' +
         '<div class="row">' +
           '<div class="col-sm-3">' + field("Key", input("key", v.key, "MY_API_KEY")) + "</div>" +
           '<div class="col-sm-2">' + field("Visibility", select("visibility", v.visibility || "secret", ["secret", "public"])) + "</div>" +
           storageSelect +
           '<div class="' + deriveCol + '">' + field("Derive", select("derive", v.derive || "", ["", "public-ipv4"])) + "</div>" +
-          '<div class="col-sm-2 text-right" style="padding-top:22px">' +
-            '<button type="button" class="btn btn-danger btn-xs" data-remove-var="' + idx + '">Remove</button>' +
-          "</div>" +
+          removeCol +
         "</div>" +
         '<div class="row">' +
           '<div class="col-sm-6">' + field("Ask", input("ask", v.ask, "How to get this key")) + "</div>" +
@@ -664,7 +669,7 @@ export function buildUiHtml(opts: {
               '<button type="button" class="btn btn-danger btn-xs pull-right" data-remove-var="' + o.i + '">Remove</button>' +
             "</div>" +
             '<div class="bundle-collapse"><div class="panel-body">' +
-              renderVarEditor(o.v, o.i) +
+              renderVarEditor(o.v, o.i, { hideRemove: true }) +
             "</div></div>" +
           "</div>";
         });
@@ -848,6 +853,7 @@ export function buildUiHtml(opts: {
     el("raw-content").addEventListener("input", function () { setDirty(true); });
 
     el("save").onclick = function () {
+      if (!dirty) return;
       setStatus("info", "Saving…");
       var payload;
       if (usingRaw) {
