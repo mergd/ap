@@ -18,10 +18,6 @@ export function globalManifestPath(): string {
   return join(globalHome(), GLOBAL_MANIFEST_NAME);
 }
 
-export function globalSecretsPath(): string {
-  return join(globalHome(), SECRETS_FILE);
-}
-
 export function projectVaultDir(projectRoot: string): string {
   return join(projectRoot, PROJECT_VAULT_DIR);
 }
@@ -32,14 +28,6 @@ export function projectSecretsPath(projectRoot: string): string {
 
 export function projectConfigPath(projectRoot: string): string {
   return join(projectVaultDir(projectRoot), "config.toml");
-}
-
-export function projectLocalConfigPath(projectRoot: string): string {
-  return join(projectVaultDir(projectRoot), "local.toml");
-}
-
-export function projectLocalConfigExamplePath(projectRoot: string): string {
-  return join(projectVaultDir(projectRoot), "local.toml.example");
 }
 
 export function projectSopsYamlPath(projectRoot: string): string {

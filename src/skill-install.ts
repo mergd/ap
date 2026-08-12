@@ -1,6 +1,6 @@
 import { join, relative, dirname } from "node:path";
 import { realpath, symlink, unlink } from "node:fs/promises";
-import { writeTextFile, ensureDir, isNotFound } from "./fs-helpers.ts";
+import { writeTextFile, ensureDir, isNotFound, pathExists } from "./fs-helpers.ts";
 import { findProjectRoot } from "./paths.ts";
 
 export type SkillTarget = "agents" | "claude" | "cursor";
@@ -99,9 +99,14 @@ async function linkSkill(linkPath: string, canonicalPath: string): Promise<void>
   await symlink(rel, linkPath);
 }
 
-export async function installSkill(scope: "global" | "project"): Promise<string[]> {
+export async function installSkill(
+  scope: "global" | "project",
+  options?: { projectRoot?: string },
+): Promise<string[]> {
   const projectRoot =
-    scope === "project" ? ((await findProjectRoot()) ?? process.cwd()) : undefined;
+    scope === "project"
+      ? (options?.projectRoot ?? (await findProjectRoot()) ?? process.cwd())
+      : undefined;
   const content = generateSkillMarkdown();
   const locations = skillDirs(scope, projectRoot);
   const dests: string[] = [];
@@ -127,4 +132,19 @@ export async function installSkill(scope: "global" | "project"): Promise<string[
   }
 
   return dests;
+}
+
+/** Suggest installing the global agent skill when it is missing. */
+export async function checkSkillInstallTip(
+  options: { env?: NodeJS.ProcessEnv; skillPath?: string } = {},
+): Promise<string | null> {
+  const env = options.env ?? process.env;
+  const disabled = env.AP_NO_SKILL_TIP?.toLowerCase();
+  if (env.CI || disabled === "1" || disabled === "true") return null;
+
+  const canonical = skillDirs("global").find((l) => l.target === CANONICAL_SKILL_TARGET)!;
+  const skillPath = options.skillPath ?? join(canonical.dir, "SKILL.md");
+  if (await pathExists(skillPath)) return null;
+
+  return "tip: run `ap skill install` so Cursor/Claude/Codex pick up the ap skill";
 }

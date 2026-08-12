@@ -1,7 +1,5 @@
 node_modules/
-.ap/local.toml
-.ap/secrets.plain.json
-secrets.json
+.ap/
 .npmrc
 
 # OS / editor

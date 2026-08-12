@@ -1,9 +1,12 @@
 import { describe, test } from "node:test";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { expect } from "./expect.ts";
 import { buildAgentGuide, formatGuideHuman } from "../src/guide.ts";
 import { rejectRemovedFlags, showToAgentOutput } from "../src/agent-output.ts";
 import { yamlStringify } from "../src/yaml.ts";
-import { generateSkillMarkdown, skillDirs } from "../src/skill-install.ts";
+import { generateSkillMarkdown, installSkill, skillDirs, checkSkillInstallTip } from "../src/skill-install.ts";
 
 describe("ap guide", () => {
   test("buildAgentGuide has required fields", () => {
@@ -120,5 +123,38 @@ describe("skill install generation", () => {
     expect(global[0]!.dir.endsWith("/.agents/skills/ap")).toBe(true);
     expect(global[1]!.dir.endsWith("/.claude/skills/ap")).toBe(true);
     expect(global[2]!.dir.endsWith("/.cursor/skills/ap")).toBe(true);
+  });
+
+  test("installSkill writes project skill under repo root", async () => {
+    const root = await mkdtemp(join(tmpdir(), "ap-skill-"));
+    try {
+      const dests = await installSkill("project", { projectRoot: root });
+      expect(dests[0]).toBe(join(root, ".agents", "skills", "ap", "SKILL.md"));
+      const md = await readFile(dests[0]!, "utf8");
+      expect(md).toContain("ap show <bundle> --check");
+      expect(await readFile(join(root, ".cursor", "skills", "ap", "SKILL.md"), "utf8")).toContain(
+        "ap show <bundle> --check",
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("checkSkillInstallTip tips when missing and stays quiet when present", async () => {
+    const root = await mkdtemp(join(tmpdir(), "ap-skill-tip-"));
+    try {
+      const dests = await installSkill("project", { projectRoot: root });
+      const installed = dests[0]!;
+      const missing = join(root, "nope", "SKILL.md");
+
+      expect(await checkSkillInstallTip({ env: {}, skillPath: missing })).toContain("ap skill install");
+      expect(await checkSkillInstallTip({ env: {}, skillPath: installed })).toBe(null);
+      expect(await checkSkillInstallTip({ env: { CI: "1" }, skillPath: missing })).toBe(null);
+      expect(await checkSkillInstallTip({ env: { AP_NO_SKILL_TIP: "1" }, skillPath: missing })).toBe(
+        null,
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

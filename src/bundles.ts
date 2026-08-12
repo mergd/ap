@@ -51,17 +51,32 @@ export function lookupCatalogVar(key: string, bundleHint?: string): VarDefinitio
   return undefined;
 }
 
+/** Catalog bundles whose keys appear among the given vars (identity lives in catalog). */
+function catalogBundlesForVarKeys(varKeys: Iterable<string>): string[] {
+  const keys = new Set(varKeys);
+  return listCatalogBundles().filter((name) => {
+    const entry = getCatalogBundle(name);
+    if (!entry) return false;
+    return Object.keys(entry.vars).some((key) => keys.has(key));
+  });
+}
+
 export function getActiveBundleNames(ctx: ResolveContext, globalOnly: boolean): string[] | null {
   if (globalOnly) {
     if (!ctx.globalManifest) return [];
-    return [...ctx.globalManifest.bundles.keys()].sort();
+    const explicit = [...ctx.globalManifest.bundles.keys()];
+    const inferred = catalogBundlesForVarKeys(ctx.globalManifest.vars.keys());
+    return [...new Set([...explicit, ...inferred])].sort();
   }
 
   const active = ctx.projectManifest?.activeBundles;
   if (active !== undefined) return active;
 
-  if (ctx.globalManifest && ctx.globalManifest.bundles.size > 0) {
-    return [...ctx.globalManifest.bundles.keys()].sort();
+  if (ctx.globalManifest) {
+    const explicit = [...ctx.globalManifest.bundles.keys()];
+    const inferred = catalogBundlesForVarKeys(ctx.globalManifest.vars.keys());
+    const names = [...new Set([...explicit, ...inferred])];
+    if (names.length > 0) return names.sort();
   }
 
   return null;

@@ -28,12 +28,11 @@ export function buildAgentGuide(): AgentGuide {
       run: "ap run [BUNDLE] -- <cmd>",
       set: 'echo "$KEY" | ap set KEY',
       unset: "ap unset KEY",
-      migrate: "ap migrate",
     },
     paths: {
       global_manifest: globalManifestPath(),
       project_toml: "ap.toml",
-      project_secrets: '.ap/secrets.json (only when var has storage = "secrets.json")',
+      project_secrets: ".ap/secrets.json",
       project_encryption: ".sops.yaml + .ap/config.toml (run ap setup)",
       global_home: globalHome(),
     },
@@ -51,7 +50,7 @@ export function formatGuideHuman(): string {
     "",
     "Rules: prefer a bundle name on show / run",
     "",
-    "Commands: show, catalog, run, set, unset, migrate",
+    "Commands: show, catalog, run, set, unset",
   ].join("\n");
 }
 

@@ -13,7 +13,7 @@ export function spawnAsync(
   command: string,
   args: string[],
   options: SpawnOptions = {},
-): Promise<{ code: number; stdout: string }> {
+): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     const proc = spawn(command, args, {
       cwd: options.cwd,
@@ -37,14 +37,21 @@ export function spawnAsync(
       });
     }
 
+    let stderr = "";
+    if (options.stderr === "pipe" && proc.stderr) {
+      proc.stderr.on("data", (chunk: Buffer | string) => {
+        stderr += chunk.toString();
+      });
+    }
+
     if (options.detached) {
       proc.unref();
-      resolve({ code: 0, stdout: "" });
+      resolve({ code: 0, stdout: "", stderr: "" });
       return;
     }
 
     proc.on("close", (code) => {
-      resolve({ code: code ?? 1, stdout: stdout.trim() });
+      resolve({ code: code ?? 1, stdout: stdout.trim(), stderr: stderr.trim() });
     });
   });
 }

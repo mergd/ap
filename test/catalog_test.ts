@@ -1,16 +1,16 @@
 import { describe, test } from "node:test";
 import { expect } from "./expect.ts";
-import { mergeBundleDefinition } from "../src/bundles.ts";
+import { getActiveBundleNames, mergeBundleDefinition } from "../src/bundles.ts";
 import { buildManifestFromCatalog, mergeCatalogBundles } from "../src/catalog/scaffold.ts";
 import { emptyManifest, serializeManifest } from "../src/manifest.ts";
+import type { ResolveContext } from "../src/types.ts";
 
 describe("catalog scaffold", () => {
-  test("buildManifestFromCatalog writes full bundle + var defs", () => {
+  test("buildManifestFromCatalog writes var stubs only (no [bundle.*])", () => {
     const manifest = buildManifestFromCatalog(["cloudflare"]);
-    expect(manifest.bundles.has("cloudflare")).toBe(true);
+    expect(manifest.bundles.has("cloudflare")).toBe(false);
     expect(manifest.vars.has("CF_GLOBAL_API_KEY")).toBe(true);
     expect(manifest.vars.get("CF_GLOBAL_EMAIL")?.visibility).toBe("public");
-    expect(manifest.bundles.get("cloudflare")?.prompt).toContain("X-Auth-Email");
   });
 
   test("mergeCatalogBundles preserves existing var values", () => {
@@ -22,7 +22,7 @@ describe("catalog scaffold", () => {
     });
     mergeCatalogBundles(manifest, ["cloudflare"]);
     expect(manifest.vars.get("CF_GLOBAL_EMAIL")?.value).toBe("kept@example.com");
-    expect(manifest.bundles.has("cloudflare")).toBe(true);
+    expect(manifest.bundles.has("cloudflare")).toBe(false);
   });
 
   test("runtime falls back to catalog bundle definitions", () => {
@@ -31,31 +31,37 @@ describe("catalog scaffold", () => {
     expect(bundle?.prompt).toContain("X-Auth-Email");
   });
 
-  test("runtime resolves scaffolded manifest", () => {
+  test("runtime resolves scaffolded manifest via catalog identity", () => {
     const global = buildManifestFromCatalog(["cloudflare"]);
     const bundle = mergeBundleDefinition("cloudflare", null, global);
     expect(bundle?.vars).toEqual(["CF_GLOBAL_API_KEY", "CF_GLOBAL_EMAIL"]);
   });
 
-  test("openrouter bundle documents response key path", () => {
+  test("openrouter catalog prompt documents response key path", () => {
     const manifest = buildManifestFromCatalog(["openrouter"]);
-    expect(manifest.bundles.has("openrouter")).toBe(true);
     expect(manifest.vars.has("OPENROUTER_MANAGEMENT_API_KEY")).toBe(true);
-    expect(manifest.bundles.get("openrouter")?.prompt).toContain(".key");
-    expect(manifest.bundles.get("openrouter")?.prompt).toContain("not .data.key");
+    const bundle = mergeBundleDefinition("openrouter", null, manifest);
+    expect(bundle?.prompt).toContain(".key");
+    expect(bundle?.prompt).toContain("not .data.key");
   });
 
-  test("serializeManifest groups vars under their bundle", () => {
+  test("serializeManifest writes flat vars when no [bundle.*]", () => {
     const manifest = buildManifestFromCatalog(["cloudflare", "namecheap"]);
     const content = serializeManifest(manifest);
-    const cfBundle = content.indexOf("[bundle.cloudflare]");
-    const cfKey = content.indexOf("[var.CF_GLOBAL_API_KEY]");
-    const cfEmail = content.indexOf("[var.CF_GLOBAL_EMAIL]");
-    const ncBundle = content.indexOf("[bundle.namecheap]");
-    const ncUser = content.indexOf("[var.NC_API_USER]");
-    expect(cfBundle).toBeLessThan(cfKey);
-    expect(cfKey).toBeLessThan(cfEmail);
-    expect(cfEmail).toBeLessThan(ncBundle);
-    expect(ncBundle).toBeLessThan(ncUser);
+    expect(content.includes("[bundle.cloudflare]")).toBe(false);
+    expect(content.includes("[bundle.namecheap]")).toBe(false);
+    expect(content).toContain("[var.CF_GLOBAL_API_KEY]");
+    expect(content).toContain("[var.NC_API_USER]");
+  });
+
+  test("global active bundles infer from catalog ∩ var keys", () => {
+    const global = buildManifestFromCatalog(["cloudflare"]);
+    const ctx: ResolveContext = {
+      projectRoot: null,
+      globalManifest: global,
+      projectManifest: null,
+      projectSecrets: {},
+    };
+    expect(getActiveBundleNames(ctx, true)).toEqual(["cloudflare"]);
   });
 });

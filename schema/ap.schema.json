@@ -31,14 +31,9 @@
           "enum": ["public", "secret"],
           "default": "secret"
         },
-        "storage": {
-          "type": "string",
-          "enum": ["secrets.json"],
-          "description": "Value lives in .ap/secrets.json (project vault; mutually exclusive with value)"
-        },
         "value": {
           "type": "string",
-          "description": "Inline value in TOML (public or secret; mutually exclusive with derive and storage)"
+          "description": "Inline value in TOML (global secrets or public vars; project secrets use .ap/secrets.json via ap set --project; mutually exclusive with derive)"
         },
         "ask": {
           "type": "string",

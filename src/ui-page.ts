@@ -272,7 +272,6 @@ export function buildUiHtml(opts: {
 
     function valueField(v) {
       var isSecret = (v.visibility || "secret") === "secret";
-      var useVault = v.storage === "secrets.json";
       var real = v.value || "";
       if (!isSecret) {
         return field(
@@ -281,7 +280,7 @@ export function buildUiHtml(opts: {
         );
       }
 
-      if (MODE === "project" && useVault) {
+      if (MODE === "project") {
         return field(
           "Storage",
           '<p class="form-control-static" style="margin:0"><code>secrets.json</code></p>'
@@ -307,13 +306,6 @@ export function buildUiHtml(opts: {
         var vis = row.querySelector('[data-f="visibility"]');
         if (vis) {
           vis.onchange = function () {
-            readFormIntoState();
-            renderAll();
-          };
-        }
-        var storage = row.querySelector('[data-f="storage"]');
-        if (storage) {
-          storage.onchange = function () {
             readFormIntoState();
             renderAll();
           };
@@ -371,10 +363,7 @@ export function buildUiHtml(opts: {
 
     function renderVarEditor(v, idx, opts) {
       opts = opts || {};
-      var storageSelect = MODE === "project"
-        ? '<div class="col-sm-3">' + field("Storage", select("storage", v.storage || "", ["", "secrets.json"])) + "</div>"
-        : "";
-      var deriveCol = MODE === "project" ? "col-sm-2" : "col-sm-3";
+      var deriveCol = "col-sm-3";
       var removeCol = opts.hideRemove
         ? ""
         : '<div class="col-sm-2 text-right" style="padding-top:22px">' +
@@ -382,9 +371,8 @@ export function buildUiHtml(opts: {
           "</div>";
       return '<div class="var-row" data-var-idx="' + idx + '">' +
         '<div class="row">' +
-          '<div class="col-sm-3">' + field("Key", input("key", v.key, "MY_API_KEY")) + "</div>" +
-          '<div class="col-sm-2">' + field("Visibility", select("visibility", v.visibility || "secret", ["secret", "public"])) + "</div>" +
-          storageSelect +
+          '<div class="col-sm-4">' + field("Key", input("key", v.key, "MY_API_KEY")) + "</div>" +
+          '<div class="col-sm-3">' + field("Visibility", select("visibility", v.visibility || "secret", ["secret", "public"])) + "</div>" +
           '<div class="' + deriveCol + '">' + field("Derive", select("derive", v.derive || "", ["", "public-ipv4"])) + "</div>" +
           removeCol +
         "</div>" +
@@ -407,6 +395,7 @@ export function buildUiHtml(opts: {
         };
         var key = get("key").trim();
         if (!key) return;
+        var visibility = get("visibility") || "secret";
         var valueNode = row.querySelector('[data-f="value"]');
         var value = "";
         if (valueNode) {
@@ -416,10 +405,13 @@ export function buildUiHtml(opts: {
             value = valueNode.value || "";
           }
         }
+        // Project secrets always live in .ap/secrets.json — never serialize inline value.
+        if (MODE === "project" && visibility === "secret") {
+          value = "";
+        }
         var item = {
           key: key,
-          visibility: get("visibility") || "secret",
-          storage: get("storage") || undefined,
+          visibility: visibility,
           ask: get("ask") || undefined,
           docs: get("docs") || undefined,
           value: value || undefined,
@@ -429,8 +421,6 @@ export function buildUiHtml(opts: {
         if (!item.docs) delete item.docs;
         if (!item.value) delete item.value;
         if (!item.derive) delete item.derive;
-        if (!item.storage) delete item.storage;
-        if (item.storage === "secrets.json") delete item.value;
         out.push(item);
       });
       return out;
@@ -463,7 +453,7 @@ export function buildUiHtml(opts: {
     }
 
     function renderGlobalBundles() {
-      var html = '<p class="section-hint">Each grouping is a <code>[bundle.*]</code> with its vars. Collapse to scan; expand to edit.</p>';
+      var html = '<p class="section-hint">Optional custom <code>[bundle.*]</code> groupings. Catalog identity is separate — use the pills below to seed vars only.</p>';
 
       html += '<div class="add-grouping">' +
         '<div class="form-inline" style="margin-bottom:8px">' +
@@ -723,11 +713,6 @@ export function buildUiHtml(opts: {
     }
 
     function addCatalogBundle(name) {
-      if (state.bundles.some(function (b) { return b.name === name; })) {
-        openBundles[name] = true;
-        renderAll();
-        return;
-      }
       fetch("/api/catalog/" + encodeURIComponent(name))
         .then(function (r) { return r.json(); })
         .then(function (body) {
@@ -735,14 +720,18 @@ export function buildUiHtml(opts: {
             setStatus("danger", body.error);
             return;
           }
-          state.bundles.push(body.bundle);
+          var added = 0;
           (body.vars || []).forEach(function (v) {
-            if (!state.vars.some(function (x) { return x.key === v.key; })) state.vars.push(v);
+            if (!state.vars.some(function (x) { return x.key === v.key; })) {
+              state.vars.push(v);
+              added++;
+            }
           });
-          openBundles[name] = true;
           renderAll();
           setDirty(true);
-          setStatus("info", "Added catalog grouping " + name);
+          setStatus("info", added
+            ? "Seeded " + added + " var(s) from catalog " + name
+            : "Catalog " + name + " vars already present");
         })
         .catch(function (err) { setStatus("danger", String(err)); });
     }

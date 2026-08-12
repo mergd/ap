@@ -1,6 +1,6 @@
 # ap
 
-Agent-portable local secrets. Declare **bundles** of credentials in committed manifests, store global secret values inline in TOML, and opt project secrets into `.ap/secrets.json` explicitly. Agents check readiness with `ap show <bundle> --check` before calling external APIs.
+Agent-portable local secrets. Declare **bundles** of credentials in committed manifests, store global secret values inline in TOML, and keep project secrets in `.ap/secrets.json`. Agents check readiness with `ap show <bundle> --check` before calling external APIs.
 
 ## Install
 
@@ -25,12 +25,12 @@ npm link   # or: ln -sf "$(pwd)/bin/ap" ~/.local/bin/ap
 Agents: run `ap guide` first (YAML contract for show → run → set).
 
 ```bash
-# Optional: copy catalog templates into the global manifest
-ap init -g                      # all catalog bundles → ~/.config/ap/manifest.toml
-# ap init -g cloudflare         # or pick bundles
+# Optional: seed catalog var stubs into the global manifest
+ap init -g                      # all catalog vars → ~/.config/ap/manifest.toml
+# ap init -g cloudflare         # or pick a catalog bundle's vars
 
-# Per repo (optional — catalog fallback works without copying bundles globally)
-ap init
+# Per repo (catalog owns bundle identity — no need to copy [bundle.*] globally)
+ap init                         # ap.toml + .ap/ + project agent skill
 # edit ap.toml → bundles = ["namecheap", "cloudflare"]
 eval "$(op signin)"
 ap setup                        # SOPS + 1Password — safe to commit .ap/secrets.json
@@ -39,7 +39,7 @@ ap setup                        # SOPS + 1Password — safe to commit .ap/secret
 echo "$NC_API_KEY" | ap set NC_API_KEY
 echo "$KEY" | ap set CF_GLOBAL_API_KEY
 
-# Project vault (declares storage = "secrets.json" automatically)
+# Project vault (.ap/secrets.json)
 echo "$TOKEN" | ap set DEPLOY_TOKEN --project
 
 # Inspect secrets and check readiness
@@ -50,8 +50,6 @@ ap show cloudflare --check
 ap run cloudflare -- curl ...
 ```
 
-If you still have a legacy `~/.config/ap/secrets.json`, run `ap migrate`.
-
 Install the agent skill (Cursor, Claude Code, Codex):
 
 ```bash
@@ -59,19 +57,21 @@ ap skill install              # ~/.agents/skills/ap/ (+ symlinks for claude/curs
 ap skill install --project    # same paths under current repo
 ```
 
+`npm install -g @mergd/ap` runs `ap skill install` via postinstall (global). `ap init` installs the skill into the repo.
+
 ## How it works
 
-**Bundles** group related env vars for a capability (e.g. `namecheap` → `NC_API_USER`, `NC_API_KEY`, `NC_CLIENT_IP`). Built-in catalog templates resolve at runtime even if not copied into `~/.config/ap/manifest.toml`.
+**Bundles** group related env vars for a capability (e.g. `namecheap` → `NC_API_USER`, `NC_API_KEY`, `NC_CLIENT_IP`). Bundle identity (keys, ask/docs/prompt) lives in the built-in catalog; the global manifest only stores var stubs and values.
 
 | File | Purpose |
 |------|---------|
-| `~/.config/ap/manifest.toml` | Global bundles, public vars, **and secret values** (`value =`) |
-| `ap.toml` | Which bundles this repo uses; project vars; optional `storage = "secrets.json"` |
-| `.ap/secrets.json` | Project vault — only when a var declares `storage = "secrets.json"` (SOPS after `ap setup`) |
+| `~/.config/ap/manifest.toml` | Global public vars **and secret values** (`value =`) |
+| `ap.toml` | Which bundles this repo uses; project var declarations (no secret values) |
+| `.ap/secrets.json` | Project vault — all project-scoped secrets (SOPS after `ap setup`) |
 | `.sops.yaml` | SOPS encryption rules (committed after `ap setup`) |
 | `.ap/config.toml` | 1Password vault/item for age key (committed) |
 
-There is **no** global `secrets.json`. Project vault use is never implied by scope — declare it:
+There is **no** global `secrets.json`. Project secrets always live in `.ap/secrets.json`:
 
 ```toml
 # ap.toml
@@ -80,8 +80,11 @@ scope = "project"
 
 [var.DEPLOY_TOKEN]
 visibility = "secret"
-storage = "secrets.json"
 ask = "Deploy token for this repo"
+```
+
+```bash
+echo "$TOKEN" | ap set DEPLOY_TOKEN --project
 ```
 
 Project secrets use **SOPS + age** with the private key in **1Password** (same pattern as [lockbox](https://github.com/mergd/lockbox)). Run `ap setup` once per repo; teammates need `op` access to decrypt.
@@ -103,18 +106,16 @@ ap show [BUNDLE] [-g] [--check] [--validate]
 ap catalog
 ap set KEY [-g|--project] [--from-env]
 ap unset KEY [-g|--project]
-ap migrate                       Legacy secrets.json → TOML-first
 ap run [BUNDLE] -- <cmd...>
 ap init [-g|--global] [BUNDLE...]
 ap setup
-ap edit <secrets|global|project>
-ap ui [-g|--global] [--port N] [--no-open]
+ap edit <secrets|global|project> [--ui] [--port N] [--no-open]
 ap skill install [--project]
 ```
 
-`-g` is short for `--global`. `ap set` defaults to writing `value` in the global manifest; use `--project` for the repo vault (`storage = "secrets.json"`).
+`-g` is short for `--global`. `ap set` defaults to writing `value` in the global manifest; use `--project` for the repo vault (`.ap/secrets.json`).
 
-`ap ui` opens a local Bootstrap-era page on `127.0.0.1` to edit project `ap.toml` (or `-g` for `manifest.toml`, including global secret values).
+`ap edit --ui` opens a local Bootstrap-era page on `127.0.0.1` to edit project `ap.toml` (or `-g` / `global` for `manifest.toml`, including global secret values).
 
 Output is human-readable in a terminal and YAML when piped. Catalog bundles: `cloudflare`, `namecheap`, `openrouter`.
 

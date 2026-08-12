@@ -1,4 +1,3 @@
-import { join } from "node:path";
 import { runGlobalDoctor, runDoctor } from "./doctor.ts";
 import { printShow } from "./doctor-format.ts";
 import {
@@ -15,17 +14,20 @@ import {
   projectManifestPath,
   projectSecretsPath,
   projectVaultDir,
-  PROJECT_VAULT_DIR,
 } from "./paths.ts";
 import { runCommand } from "./run.ts";
 import { createVaultStore, readStdinSecret } from "./vault.ts";
 import type { Scope, VarDefinition } from "./types.ts";
 import { getPathsInfo, openInEditor, parseEditTarget, resolveEditPath, resolveEditScope } from "./edit.ts";
-import { installSkill } from "./skill-install.ts";
+import { installSkill, checkSkillInstallTip } from "./skill-install.ts";
 import { printHelp } from "./help.ts";
-import { ensureDir, pathExists, readTextFile, writeTextFile } from "./fs-helpers.ts";
+import { ensureDir, pathExists, writeTextFile } from "./fs-helpers.ts";
 import { formatValidateReports, runValidate } from "./validate.ts";
-import { buildManifestFromCatalog, mergeCatalogBundles } from "./catalog/scaffold.ts";
+import {
+  buildManifestFromCatalog,
+  mergeCatalogBundles,
+  resolveCatalogBundleNames,
+} from "./catalog/scaffold.ts";
 import { printCatalog } from "./catalog/list.ts";
 import { printGuide } from "./guide.ts";
 import { formatSetupHuman, initEncryptionConfig, runEncryptionSetup } from "./encryption/setup.ts";
@@ -38,7 +40,6 @@ import {
 } from "./agent-output.ts";
 import { checkForUpdate, formatUpdateNotice, readCurrentVersion } from "./update-check.ts";
 import { startUi } from "./ui.ts";
-import { migrateAllStores } from "./migrate.ts";
 
 function usage(): void {
   printHelp();
@@ -84,12 +85,11 @@ function resolveSetScope(args: string[]): Scope {
   return args.includes("--project") ? "project" : "global";
 }
 
-/** Ensure var exists; for project vault sets, also declare storage = "secrets.json". */
+/** Ensure a secret var stub exists in the target manifest. */
 async function ensureVarInManifest(
   key: string,
   scope: Scope,
   projectRoot: string | null,
-  options?: { vaultStorage?: boolean },
 ): Promise<void> {
   if (scope === "global") {
     await ensureDir(globalHome());
@@ -113,28 +113,12 @@ async function ensureVarInManifest(
     process.exit(1);
   }
 
-  const existing = manifest.vars.get(key);
-  if (!existing) {
-    const def: VarDefinition = {
+  if (!manifest.vars.has(key)) {
+    manifest.vars.set(key, {
       key,
       visibility: "secret",
       scope: manifest.scope,
-      ...(options?.vaultStorage ? { storage: "secrets.json" as const } : {}),
-    };
-    manifest.vars.set(key, def);
-    await saveManifestContent(path, manifest);
-    return;
-  }
-
-  if (options?.vaultStorage && existing.storage !== "secrets.json") {
-    if (existing.value !== undefined) {
-      console.error(
-        `Error: ${key} has an inline value — remove it before using storage = "secrets.json"`,
-      );
-      process.exit(1);
-    }
-    existing.storage = "secrets.json";
-    manifest.vars.set(key, existing);
+    });
     await saveManifestContent(path, manifest);
   }
 }
@@ -153,7 +137,6 @@ async function setGlobalManifestValue(key: string, value: string): Promise<void>
     scope: "global",
     value,
   };
-  delete def.storage;
   manifest.vars.set(key, def);
   await saveManifestContent(path, manifest);
 }
@@ -177,10 +160,11 @@ async function cmdInit(global: boolean, bundleNames: string[]): Promise<void> {
     const existing = await loadManifest(manifestPath);
 
     if (!existing) {
+      const seeded = resolveCatalogBundleNames(bundleNames);
       const manifest = buildManifestFromCatalog(bundleNames);
       await saveManifestContent(manifestPath, manifest);
       console.log(`Created ${manifestPath}`);
-      console.log(`Bundles: ${[...manifest.bundles.keys()].join(", ")}`);
+      console.log(`Seeded vars for: ${seeded.join(", ")}`);
       return;
     }
 
@@ -188,9 +172,9 @@ async function cmdInit(global: boolean, bundleNames: string[]): Promise<void> {
     await saveManifestContent(manifestPath, existing);
 
     if (added.length > 0) {
-      console.log(`Added bundles: ${added.join(", ")}`);
+      console.log(`Seeded vars for: ${added.join(", ")}`);
     } else if (bundleNames.length > 0) {
-      console.log("All requested bundles already in manifest");
+      console.log("All requested catalog vars already in manifest");
     }
     console.log(`Updated ${manifestPath}`);
     return;
@@ -206,29 +190,17 @@ async function cmdInit(global: boolean, bundleNames: string[]): Promise<void> {
 
   await writeTextFile(manifestPath, INIT_PROJECT_MANIFEST);
   await ensureDir(projectVaultDir(root));
-
-  const gitignorePath = join(root, ".gitignore");
-  let gitignore = "";
-  if (await pathExists(gitignorePath)) {
-    gitignore = await readTextFile(gitignorePath);
-  }
-
-  if (!gitignore.includes(PROJECT_VAULT_DIR)) {
-    const prefix = gitignore.length > 0 && !gitignore.endsWith("\n") ? "\n" : "";
-    await writeTextFile(
-      gitignorePath,
-      gitignore +
-        `${prefix}# ap — commit encrypted .ap/secrets.json after ap setup\n` +
-        `${PROJECT_VAULT_DIR}/local.toml\n` +
-        `${PROJECT_VAULT_DIR}/secrets.plain.json\n`,
-    );
-  }
-
+  await writeTextFile(projectSecretsPath(root), "{}\n");
   await initEncryptionConfig(root);
+  const skillDests = await installSkill("project", { projectRoot: root });
 
   console.log(`Created ${manifestPath}`);
-  console.log(`Created ${projectVaultDir(root)}/`);
-  console.log(`Updated .gitignore for encrypted secrets`);
+  console.log(`Created ${projectSecretsPath(root)}`);
+  console.log(`Created ${projectVaultDir(root)}/config.toml`);
+  console.log(`Installed skill →`);
+  for (const dest of skillDests) {
+    console.log(`  ${dest}`);
+  }
   console.log(`Next: eval "$(op signin)" && ap setup`);
 }
 
@@ -261,7 +233,7 @@ async function cmdSet(
     return;
   }
 
-  await ensureVarInManifest(key, "project", projectRoot, { vaultStorage: true });
+  await ensureVarInManifest(key, "project", projectRoot);
   const vault = createVaultStore(projectSecretsPath(projectRoot!), {
     projectRoot,
   });
@@ -315,31 +287,6 @@ async function cmdUnset(key: string, scope: Scope): Promise<void> {
   console.log(`Unset ${key} (project)`);
 }
 
-async function cmdMigrate(): Promise<void> {
-  const results = await migrateAllStores(await findProjectRoot());
-  let total = 0;
-  for (const r of results) {
-    if (r.migrated.length === 0 && r.annotated.length === 0 && !r.deletedSecretsJson) {
-      continue;
-    }
-    console.log(r.manifestPath);
-    if (r.migrated.length > 0) {
-      console.log(`  moved to TOML: ${r.migrated.join(", ")}`);
-      total += r.migrated.length;
-    }
-    if (r.annotated.length > 0) {
-      console.log(`  storage = "secrets.json": ${r.annotated.join(", ")}`);
-      total += r.annotated.length;
-    }
-    if (r.deletedSecretsJson) {
-      console.log(`  deleted ${r.deletedSecretsJson}`);
-    }
-  }
-  if (total === 0 && !results.some((r) => r.deletedSecretsJson)) {
-    console.log("Nothing to migrate");
-  }
-}
-
 async function cmdRun(cmd: string[], bundleFilter?: string): Promise<void> {
   if (cmd.length === 0) {
     console.error("Error: no command specified (use: ap run -- <cmd>)");
@@ -350,10 +297,57 @@ async function cmdRun(cmd: string[], bundleFilter?: string): Promise<void> {
   process.exit(code);
 }
 
-async function cmdEdit(rest: string[], globalFlag: boolean): Promise<void> {
+function parsePortFlag(args: string[]): number | undefined {
+  const idx = args.indexOf("--port");
+  if (idx < 0) return undefined;
+  const portRaw = args[idx + 1];
+  const port = portRaw !== undefined ? Number(portRaw) : NaN;
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+    console.error("Error: --port must be an integer 1–65535");
+    process.exit(1);
+  }
+  return port;
+}
+
+async function cmdEdit(args: string[], rest: string[]): Promise<void> {
+  const useUi = args.includes("--ui");
+  const globalFlag = hasGlobalFlag(args);
   const raw = rest.find((a) => !a.startsWith("--"));
+
+  if (useUi) {
+    if (raw === "secrets") {
+      console.error('Error: --ui only edits TOML (use: ap edit --ui or ap edit global --ui)');
+      process.exit(1);
+    }
+
+    let global = globalFlag;
+    if (raw) {
+      let target;
+      try {
+        target = parseEditTarget(raw);
+      } catch (err) {
+        console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+        process.exit(1);
+      }
+      if (target === "manifest") global = true;
+      else if (globalFlag) {
+        console.error("Error: project is always project-scoped (omit -g/--global)");
+        process.exit(1);
+      } else {
+        global = false;
+      }
+    }
+
+    await startUi({
+      global,
+      port: parsePortFlag(args),
+      open: !args.includes("--no-open"),
+    });
+    return;
+  }
+
   if (!raw) {
-    console.error("Error: target required (secrets, global, project)");
+    console.error("Error: target required (secrets, global, project) — or pass --ui");
     process.exit(1);
   }
 
@@ -420,6 +414,11 @@ async function main(): Promise<void> {
   const update = await checkForUpdate();
   if (update) console.error(formatUpdateNotice(update));
 
+  if (positional[0] !== "skill") {
+    const skillTip = await checkSkillInstallTip();
+    if (skillTip) console.error(skillTip);
+  }
+
   if (positional[0] === "help") {
     printHelp(positional[1]);
     return;
@@ -473,7 +472,6 @@ async function main(): Promise<void> {
         break;
       }
       case "show":
-      case "doctor": // alias — prefer `show`
         await cmdShow(
           format,
           hasGlobalFlag(args),
@@ -481,6 +479,10 @@ async function main(): Promise<void> {
           args.includes("--check"),
           parseBundleFilter(args) ?? rest.find((a) => !a.startsWith("-")),
         );
+        break;
+      case "doctor":
+        console.error("Error: `ap doctor` was renamed — use `ap show`");
+        process.exit(1);
         break;
       case "catalog": {
         const sub = rest[0] ?? "list";
@@ -501,31 +503,15 @@ async function main(): Promise<void> {
         break;
       }
       case "edit":
-        await cmdEdit(rest, hasGlobalFlag(args));
+        await cmdEdit(args, rest);
         break;
       case "setup":
         await cmdSetup();
         break;
-      case "migrate":
-        await cmdMigrate();
+      case "ui":
+        console.error("Error: `ap ui` moved — use `ap edit --ui`");
+        process.exit(1);
         break;
-      case "ui": {
-        const portRaw = (() => {
-          const idx = args.indexOf("--port");
-          return idx >= 0 ? args[idx + 1] : undefined;
-        })();
-        const port = portRaw !== undefined ? Number(portRaw) : undefined;
-        if (portRaw !== undefined && (!Number.isInteger(port) || port! <= 0 || port! > 65535)) {
-          console.error("Error: --port must be an integer 1–65535");
-          process.exit(1);
-        }
-        await startUi({
-          global: hasGlobalFlag(args),
-          port,
-          open: !args.includes("--no-open"),
-        });
-        break;
-      }
       default:
         console.error(`Unknown command: ${cmd}`);
         usage();

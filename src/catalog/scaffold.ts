@@ -1,7 +1,6 @@
 import { emptyManifest, serializeManifest } from "../manifest.ts";
 import type { Manifest, VarDefinition } from "../types.ts";
 import {
-  catalogBundleDefinition,
   catalogVarToDefinition,
   getCatalogBundle,
   listCatalogBundles,
@@ -43,25 +42,25 @@ function mergeVarDefinition(existing: VarDefinition, incoming: VarDefinition): V
   };
 }
 
-/** Add catalog bundle + var stubs without overwriting existing manifest entries. */
+/**
+ * Add catalog var stubs without overwriting existing values.
+ * Bundle identity (ask/docs/prompt/var list) stays in the catalog — no `[bundle.*]` written.
+ */
 export function mergeCatalogBundles(manifest: Manifest, bundleNames: string[]): string[] {
   const added: string[] = [];
 
   for (const name of resolveCatalogBundleNames(bundleNames)) {
-    const bundleDef = catalogBundleDefinition(name);
-    if (!bundleDef) continue;
+    const entry = getCatalogBundle(name);
+    if (!entry) continue;
 
-    if (!manifest.bundles.has(name)) {
-      manifest.bundles.set(name, bundleDef);
-      added.push(name);
-    }
-
-    const entry = getCatalogBundle(name)!;
+    let touched = false;
     for (const [key, varDef] of Object.entries(entry.vars)) {
       const incoming = { ...catalogVarToDefinition(key, varDef), scope: manifest.scope };
       const existing = manifest.vars.get(key);
+      if (!existing) touched = true;
       manifest.vars.set(key, existing ? mergeVarDefinition(existing, incoming) : incoming);
     }
+    if (touched) added.push(name);
   }
 
   return added;

@@ -11,8 +11,6 @@ export type UiMode = "project" | "global";
 export interface UiVar {
   key: string;
   visibility: "public" | "secret";
-  /** Project vault opt-in; only valid when mode is project and visibility is secret. */
-  storage?: "secrets.json";
   value?: string;
   ask?: string;
   docs?: string;
@@ -45,7 +43,6 @@ function varToUi(def: VarDefinition): UiVar {
   return {
     key: def.key,
     visibility: def.visibility,
-    ...(def.storage ? { storage: def.storage } : {}),
     ...(def.value !== undefined ? { value: def.value } : {}),
     ...(def.ask ? { ask: def.ask } : {}),
     ...(def.docs ? { docs: def.docs } : {}),
@@ -62,19 +59,14 @@ function uiToVar(raw: UiVar, fileScope: Scope): VarDefinition {
   if (raw.derive && raw.derive !== "public-ipv4") {
     throw new Error(`${key}: invalid derive "${raw.derive}"`);
   }
-  if (raw.storage && raw.storage !== "secrets.json") {
-    throw new Error(`${key}: invalid storage "${raw.storage}"`);
-  }
 
-  const storage = raw.storage === "secrets.json" ? "secrets.json" as const : undefined;
   const value = raw.value?.trim() ? raw.value : undefined;
 
   return {
     key,
     visibility: raw.visibility,
     scope: fileScope,
-    storage,
-    value: storage ? undefined : value,
+    value,
     ask: raw.ask?.trim() ? raw.ask : undefined,
     docs: raw.docs?.trim() ? raw.docs : undefined,
     derive: raw.derive === "public-ipv4" ? "public-ipv4" : undefined,

@@ -1,5 +1,5 @@
-import { pathExists, readTextFile, writeTextFile } from "../fs-helpers.ts";
-import { projectLocalConfigExamplePath, projectSecretsPath, projectSopsYamlPath } from "../paths.ts";
+import { pathExists, readTextFile } from "../fs-helpers.ts";
+import { projectSecretsPath, projectSopsYamlPath } from "../paths.ts";
 import {
   defaultOpItem,
   loadEncryptionConfig,
@@ -89,17 +89,7 @@ export function formatSetupHuman(result: SetupResult): string {
   return lines.join("\n");
 }
 
-export async function writeLocalConfigExample(projectRoot: string): Promise<void> {
-  await writeTextFile(
-    projectLocalConfigExamplePath(projectRoot),
-    `# Copy to .ap/local.toml (gitignored) for local overrides
-op_account = ""
-`,
-  );
-}
-
 export async function initEncryptionConfig(projectRoot: string): Promise<void> {
   const opItem = defaultOpItem(projectRoot);
   await writeEncryptionConfig(projectRoot, { opVault: "Personal", opItem });
-  await writeLocalConfigExample(projectRoot);
 }

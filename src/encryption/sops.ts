@@ -55,7 +55,7 @@ export async function sopsDecryptFile(
   cwd: string,
 ): Promise<string> {
   await requireSops();
-  const { code, stdout } = await spawnAsync("sops", ["--decrypt", filePath], {
+  const { code, stdout, stderr } = await spawnAsync("sops", ["--decrypt", filePath], {
     cwd,
     env: sopsEnv(config),
     stdin: "ignore",
@@ -63,7 +63,8 @@ export async function sopsDecryptFile(
     stderr: "pipe",
   });
   if (code !== 0) {
-    throw new Error(`Failed to decrypt ${filePath} (is 1Password signed in?)`);
+    const detail = stderr ? `: ${stderr}` : " (is 1Password signed in?)";
+    throw new Error(`Failed to decrypt ${filePath}${detail}`);
   }
   return stdout;
 }
@@ -80,15 +81,20 @@ export async function sopsEncryptContent(
 
   try {
     await writeFile(input, plaintext, "utf8");
-    const { code } = await spawnAsync("sops", ["--encrypt", "--output", outputPath, input], {
-      cwd,
-      env: sopsEnv(config),
-      stdin: "ignore",
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    const { code, stderr } = await spawnAsync(
+      "sops",
+      ["--encrypt", "--filename-override", ".ap/secrets.json", "--output", outputPath, input],
+      {
+        cwd,
+        env: sopsEnv(config),
+        stdin: "ignore",
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
     if (code !== 0) {
-      throw new Error(`Failed to encrypt ${outputPath}`);
+      const detail = stderr ? `: ${stderr}` : "";
+      throw new Error(`Failed to encrypt ${outputPath}${detail}`);
     }
   } finally {
     await rm(dir, { recursive: true, force: true });

@@ -298,7 +298,7 @@ export async function startUi(options: StartUiOptions): Promise<void> {
   });
 
   const url = `http://${HOST}:${port}/`;
-  console.log(`ap ui — editing ${resolved.label}`);
+  console.log(`ap edit --ui — editing ${resolved.label}`);
   console.log(`  ${filePath}`);
   console.log(`  ${url}`);
   console.log("Ctrl+C to stop");

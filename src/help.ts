@@ -33,35 +33,30 @@ const topics: Record<string, string> = {
     ap catalog
     ap catalog --human`,
 
-  edit: `ap edit — open manifests or secrets in $EDITOR
+  edit: `ap edit — open manifests or secrets
 
   ap edit <secrets|global|project> [-g|--global]
+  ap edit [--ui] [global|project] [-g|--global] [--port N] [--no-open]
 
-  secrets   project .ap/secrets.json (requires storage = "secrets.json" on vars)
+  secrets   project .ap/secrets.json (project-scoped secret values)
   global    ~/.config/ap/manifest.toml (alias: manifest) — includes secret values
   project   repo ap.toml (alias: toml)
+
+  Default opens $EDITOR. --ui serves a local browser editor on 127.0.0.1
+  (TOML only — not secrets). Default --ui target is project ap.toml.
+  -g / --global   edit ~/.config/ap/manifest.toml
+  --port N        listen port (default 4789)
+  --no-open       print URL only (don't open browser)
+
+  Project vault values: ap edit secrets / ap set KEY --project.
 
   Examples:
     ap edit secrets
     ap edit global
-    ap edit project`,
-
-  ui: `ap ui — edit TOML in a local browser UI
-
-  ap ui [-g|--global] [--port N] [--no-open]
-
-  Serves a no-frills editor on 127.0.0.1 (Bootstrap 3 vibes).
-  Default: project ap.toml
-  -g / --global   edit ~/.config/ap/manifest.toml (global secrets live here as value =)
-  --port N        listen port (default 4789)
-  --no-open       print URL only (don't open browser)
-
-  Project vault values: declare storage = "secrets.json", then ap edit secrets / ap set --project.
-
-  Examples:
-    ap ui
-    ap ui -g
-    ap ui --global --port 8080 --no-open`,
+    ap edit project
+    ap edit --ui
+    ap edit --ui -g
+    ap edit global --ui --port 8080 --no-open`,
 
   run: `ap run — inject secrets and run a command
 
@@ -78,7 +73,7 @@ const topics: Record<string, string> = {
   set: `ap set — store a secret (global by default)
 
   ap set KEY                          stdin → value in ~/.config/ap/manifest.toml
-  ap set KEY --project                stdin → .ap/secrets.json (+ storage = "secrets.json")
+  ap set KEY --project                stdin → .ap/secrets.json
   ap set KEY --from-env [--project]   copy from process.env
   ap set KEY -g|--global              same as default (explicit)
 
@@ -97,16 +92,6 @@ const topics: Record<string, string> = {
   Examples:
     ap unset NC_API_KEY
     ap unset DEPLOY_TOKEN --project`,
-
-  migrate: `ap migrate — move legacy vaults into TOML-first layout
-
-  ap migrate
-
-  Global: ~/.config/ap/secrets.json values → manifest.toml value =, then delete JSON.
-  Project: annotate vault-backed vars with storage = "secrets.json".
-
-  Examples:
-    ap migrate`,
 
   setup: `ap setup — enable SOPS encryption via 1Password
 
@@ -127,10 +112,10 @@ const topics: Record<string, string> = {
 
   ap init [-g|--global] [BUNDLE...]
 
-  Project: creates ap.toml + .ap/ (once).
-  Global: creates or merges catalog bundles into ~/.config/ap/manifest.toml.
-  Catalog bundles also resolve at runtime without copying — init -g is
-  optional when you only need readiness / ap run.
+  Project: creates ap.toml, .ap/, and installs the agent skill under the repo.
+  Global: creates or merges catalog var stubs into ~/.config/ap/manifest.toml.
+  Bundle identity stays in the catalog — init -g does not write [bundle.*].
+  Catalog bundles also resolve at runtime from values alone.
   After project init, run ap setup to encrypt secrets for git.
 
   Examples:
@@ -145,7 +130,8 @@ const topics: Record<string, string> = {
   Writes a short agent skill (workflow + rules + commands).
   Installs to .agents/skills/ap/, .claude/skills/ap/, and .cursor/skills/ap/.
   --project   install under current repo
-  (default)   install under home directory (all projects)`,
+  (default)   install under home directory (all projects)
+  Also runs on ap init (project). First CLI runs tip \`ap skill install\` if the global skill is missing.`,
 
 };
 
@@ -161,12 +147,10 @@ Usage:
   ap catalog                       Built-in bundle templates
   ap set KEY [--project] [--from-env]
   ap unset KEY [--project]
-  ap migrate                       Legacy secrets.json → TOML-first
   ap run [BUNDLE] -- <cmd...>
   ap init [-g|--global] [BUNDLE...]
   ap setup                         Encrypt project secrets (SOPS + 1Password)
-  ap edit <secrets|global|project>
-  ap ui [-g|--global] [--port N] [--no-open]
+  ap edit <secrets|global|project> [--ui]
   ap skill install [--project]
 
 Topics: ${Object.keys(topics).join(", ")}
