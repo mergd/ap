@@ -1,9 +1,7 @@
 export type Visibility = "public" | "secret";
 export type Scope = "global" | "project";
-/** Where the resolved value lives. `secrets.json` is project vault only (explicit opt-in). */
+/** Where the resolved value lives at runtime. */
 export type Storage = "inline" | "secrets.json";
-/** Manifest field: declare that the value lives in `.ap/secrets.json`. */
-export type ManifestStorage = "secrets.json";
 export type VarStatus = "set" | "missing";
 
 export type DeriveKind = "public-ipv4";
@@ -13,8 +11,6 @@ export interface VarDefinition {
   visibility: Visibility;
   /** Effective storage scope — inherited from the file-level manifest scope. */
   scope?: Scope;
-  /** Explicit project vault; mutually exclusive with inline `value`. */
-  storage?: ManifestStorage;
   value?: string;
   ask?: string;
   docs?: string;
@@ -98,7 +94,7 @@ export interface ResolveContext {
   projectRoot: string | null;
   globalManifest: Manifest | null;
   projectManifest: Manifest | null;
-  /** Project `.ap/secrets.json` — only loaded when a var declares storage = "secrets.json". */
+  /** Project `.ap/secrets.json` — used for all project-scoped secrets. */
   projectSecrets: Record<string, string>;
 }
 

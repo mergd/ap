@@ -22,6 +22,24 @@ function isEmpty(value: unknown): boolean {
   return false;
 }
 
+function isFlowScalar(value: unknown): value is string | number | boolean {
+  return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
+}
+
+/** Prefer `[a, b]` for scalar lists — much cheaper for agent YAML. */
+function canFlowSequence(value: unknown[]): boolean {
+  if (value.length === 0) return false;
+  if (!value.every(isFlowScalar)) return false;
+  return !value.some((v) => typeof v === "string" && v.includes("\n"));
+}
+
+function flowSequence(value: Array<string | number | boolean>): string {
+  const items = value.map((item) =>
+    typeof item === "string" ? quoteString(item) : String(item),
+  );
+  return `[${items.join(", ")}]`;
+}
+
 function compact(value: unknown): unknown {
   if (Array.isArray(value)) {
     const items = value.map(compact).filter((v) => !isEmpty(v));
@@ -62,6 +80,9 @@ function serialize(value: unknown, level = 0): string[] {
 
   if (Array.isArray(value)) {
     if (value.length === 0) return [];
+    if (canFlowSequence(value)) {
+      return [`${indentLine(level)}${flowSequence(value)}`];
+    }
     const lines: string[] = [];
     for (const item of value) {
       if (item !== null && typeof item === "object" && !Array.isArray(item)) {
@@ -108,6 +129,10 @@ function serialize(value: unknown, level = 0): string[] {
     if (isEmpty(compacted)) continue;
 
     if (Array.isArray(compacted)) {
+      if (canFlowSequence(compacted)) {
+        lines.push(`${indentLine(level)}${key}: ${flowSequence(compacted)}`);
+        continue;
+      }
       lines.push(`${indentLine(level)}${key}:`);
       lines.push(...serialize(compacted, level + 1));
       continue;

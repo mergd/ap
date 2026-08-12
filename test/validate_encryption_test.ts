@@ -20,7 +20,7 @@ describe("validate project secrets", () => {
       const reports = await runValidate(root);
       const secretsReport = reports.find((r) => r.path === projectSecretsPath(root));
       expect(secretsReport?.ok).toBe(true);
-      expect(secretsReport?.warnings.some((w) => w.includes("ap setup") || w.includes('storage = "secrets.json"'))).toBe(true);
+      expect(secretsReport?.warnings.some((w) => w.includes("ap setup"))).toBe(true);
     } finally {
       if (prevHome === undefined) delete process.env.AP_GLOBAL_HOME;
       else process.env.AP_GLOBAL_HOME = prevHome;

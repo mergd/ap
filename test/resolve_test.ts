@@ -46,9 +46,10 @@ derive = "public-ipv4"
     expect(manifest.vars.get("NC_CLIENT_IP")?.derive).toBe("public-ipv4");
   });
 
-  test("parses storage = secrets.json", () => {
-    const manifest = parseManifestContent(
-      `version = 1
+  test("rejects storage field", () => {
+    expect(() =>
+      parseManifestContent(
+        `version = 1
 scope = "project"
 
 [var.DEPLOY_TOKEN]
@@ -56,12 +57,27 @@ visibility = "secret"
 storage = "secrets.json"
 ask = "deploy token"
 `,
-      "ap.toml",
-    );
-    expect(manifest.vars.get("DEPLOY_TOKEN")?.storage).toBe("secrets.json");
+        "ap.toml",
+      ),
+    ).toThrow(/storage was removed/);
   });
 
-  test("rejects storage on global scope", () => {
+  test("rejects project secret with inline value", () => {
+    expect(() =>
+      parseManifestContent(
+        `version = 1
+scope = "project"
+
+[var.FOO]
+visibility = "secret"
+value = "nope"
+`,
+        "ap.toml",
+      ),
+    ).toThrow(/ap set FOO --project/);
+  });
+
+  test("rejects storage even on global scope", () => {
     expect(() =>
       parseManifestContent(
         `version = 1
@@ -73,23 +89,7 @@ storage = "secrets.json"
 `,
         "bad.toml",
       ),
-    ).toThrow(/requires scope = "project"/);
-  });
-
-  test("rejects value and storage together", () => {
-    expect(() =>
-      parseManifestContent(
-        `version = 1
-scope = "project"
-
-[var.FOO]
-visibility = "secret"
-storage = "secrets.json"
-value = "nope"
-`,
-        "bad.toml",
-      ),
-    ).toThrow(/value or storage/);
+    ).toThrow(/storage was removed/);
   });
 
   test("rejects per-var scope", () => {
@@ -139,12 +139,11 @@ vars = ["NC_API_USER", "NC_API_KEY"]
 });
 
 describe("resolveVar", () => {
-  test("uses project vault only when storage = secrets.json", async () => {
+  test("resolves project secrets from vault", async () => {
     const def: VarDefinition = {
       key: "DEPLOY_TOKEN",
       visibility: "secret",
       scope: "project",
-      storage: "secrets.json",
     };
 
     const resolved = await resolveVar(
@@ -157,7 +156,7 @@ describe("resolveVar", () => {
     expect(resolved.value).toBe("tok123");
   });
 
-  test("ignores project vault without storage declaration", async () => {
+  test("project secret missing when vault empty", async () => {
     const def: VarDefinition = {
       key: "DEPLOY_TOKEN",
       visibility: "secret",
@@ -165,12 +164,12 @@ describe("resolveVar", () => {
     };
 
     const resolved = await resolveVar(
-      emptyCtx({ projectSecrets: { DEPLOY_TOKEN: "tok123" } }),
+      emptyCtx({ projectSecrets: {} }),
       def,
       { includeSecrets: true },
     );
     expect(resolved.status).toBe("missing");
-    expect(resolved.storage).toBe("inline");
+    expect(resolved.storage).toBe("secrets.json");
   });
 
   test("masks secrets in show mode", async () => {
@@ -383,7 +382,7 @@ value = "key123"
     }
   });
 
-  test("project vault works with explicit storage", async () => {
+  test("project vault works without storage field", async () => {
     const dir = await mkdtemp(join(tmpdir(), "ap-vault-"));
     const globalDir = join(dir, "global");
     const prevHome = process.env.AP_GLOBAL_HOME;
@@ -401,7 +400,6 @@ bundles = []
 
 [var.DEPLOY_TOKEN]
 visibility = "secret"
-storage = "secrets.json"
 `,
       );
       await writeFile(join(globalDir, "manifest.toml"), `version = 1\nscope = "global"\n`);

@@ -39,15 +39,16 @@ export interface AgentBundleOutput {
   next?: string;
 }
 
+export interface AgentUnbundledSecrets {
+  set?: string[];
+  missing?: Array<{ key: string; ask?: string; set_with: string }>;
+}
+
 export interface AgentShowOutput {
   ready: boolean;
   next?: string;
   bundles?: Record<string, AgentBundleOutput>;
-  unbundled_secrets?: Record<string, {
-    status: "set" | "missing";
-    ask?: string;
-    set_with?: string;
-  }>;
+  unbundled_secrets?: AgentUnbundledSecrets;
   project: string | null;
   global_home: string;
   validate?: DoctorResult["validate"];
@@ -103,24 +104,28 @@ export function showToAgentOutput(result: DoctorResult): AgentShowOutput {
     bundles.find((b) => !b.ready && b.missing[0])?.missing[0]?.set_with
     ?? unbundled.find((v) => v.status === "missing")?.set_with;
 
+  const unbundledSet = unbundled.filter((v) => v.status === "set").map((v) => v.key);
+  const unbundledMissing = unbundled
+    .filter((v) => v.status === "missing")
+    .map((v) => ({
+      key: v.key,
+      ...(v.ask ? { ask: v.ask } : {}),
+      set_with: v.set_with ?? `ap set ${v.key}`,
+    }));
+
+  const unbundledOut: AgentUnbundledSecrets | undefined =
+    unbundledSet.length > 0 || unbundledMissing.length > 0
+      ? {
+          ...(unbundledSet.length > 0 ? { set: unbundledSet } : {}),
+          ...(unbundledMissing.length > 0 ? { missing: unbundledMissing } : {}),
+        }
+      : undefined;
+
   return {
     ready: result.ready,
     ...(topNext ? { next: topNext } : {}),
     ...(bundleOut ? { bundles: bundleOut } : {}),
-    ...(unbundled.length > 0
-      ? {
-          unbundled_secrets: Object.fromEntries(unbundled.map((v) => [
-            v.key,
-            v.status === "missing"
-              ? {
-                  status: "missing" as const,
-                  ...(v.ask ? { ask: v.ask } : {}),
-                  ...(v.set_with ? { set_with: v.set_with } : {}),
-                }
-              : { status: "set" as const },
-          ])),
-        }
-      : {}),
+    ...(unbundledOut ? { unbundled_secrets: unbundledOut } : {}),
     project: result.project,
     global_home: result.global_home,
     ...(result.validate ? { validate: result.validate } : {}),

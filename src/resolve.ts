@@ -15,7 +15,6 @@ import {
   requiredRunKeys,
 } from "./bundles.ts";
 import type {
-  Manifest,
   ResolvedVar,
   ResolveContext,
   ResolveOptions,
@@ -27,21 +26,13 @@ import type {
 
 export type { ResolveContext, ResolveOptions };
 
-function manifestUsesVault(manifest: Manifest | null): boolean {
-  if (!manifest) return false;
-  for (const def of manifest.vars.values()) {
-    if (def.storage === "secrets.json") return true;
-  }
-  return false;
-}
-
 export async function loadResolveContext(projectRoot?: string | null): Promise<ResolveContext> {
   const root = projectRoot === undefined ? null : projectRoot;
   const globalManifest = await loadManifest(globalManifestPath());
   const projectManifest = root ? await loadManifest(projectManifestPath(root)) : null;
 
   let projectSecrets: Record<string, string> = {};
-  if (root && (manifestUsesVault(projectManifest) || manifestUsesVault(globalManifest))) {
+  if (root) {
     const vault = createVaultStore(projectSecretsPath(root), { projectRoot: root });
     projectSecrets = await vault.read();
   }
@@ -70,7 +61,6 @@ export function mergeDefinition(
     key,
     visibility: projectDef?.visibility ?? globalDef?.visibility ?? "secret",
     scope,
-    storage: projectDef?.storage ?? globalDef?.storage,
     value: projectDef?.value ?? globalDef?.value,
     ask: projectDef?.ask ?? globalDef?.ask,
     docs: projectDef?.docs ?? globalDef?.docs,
@@ -109,7 +99,7 @@ export async function resolveVar(
     value = def.value;
     status = "set";
   } else if (def.visibility === "secret") {
-    if (def.storage === "secrets.json") {
+    if (scope === "project") {
       storage = "secrets.json";
       value = ctx.projectSecrets[def.key];
       status = value !== undefined ? "set" : "missing";

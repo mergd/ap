@@ -60,13 +60,17 @@ describe("ap show YAML shape", () => {
 
     expect(out.ready).toBe(true);
     expect(out.bundles!.cloudflare.secrets).toEqual(["CF_KEY"]);
-    expect(out.unbundled_secrets!.OTHER_TOKEN).toEqual({ status: "set" });
-    expect(out.unbundled_secrets!.MISSING_TOKEN).toEqual({
-      status: "missing",
-      set_with: "ap set MISSING_TOKEN",
-    });
+    expect(out.unbundled_secrets!.set).toEqual(["OTHER_TOKEN"]);
+    expect(out.unbundled_secrets!.missing).toEqual([
+      { key: "MISSING_TOKEN", set_with: "ap set MISSING_TOKEN" },
+    ]);
     expect(out.next).toBe("ap set MISSING_TOKEN");
     expect(JSON.stringify(out).includes("must-not-show")).toBe(false);
+
+    const yaml = yamlStringify(out);
+    expect(yaml).toContain("set: [OTHER_TOKEN]");
+    expect(yaml).toContain("missing:");
+    expect(yaml).toContain("key: MISSING_TOKEN");
   });
 
   test("includes the next action for a missing bundle secret", () => {

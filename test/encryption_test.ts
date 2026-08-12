@@ -1,4 +1,4 @@
-import { access, mkdtemp, mkdir, readFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
@@ -20,7 +20,7 @@ describe("encryption config", () => {
     ).toBe("op://Personal/my-app-ap-age-key/password");
   });
 
-  test("writes config.toml only (no local.toml)", async () => {
+  test("writes config.toml", async () => {
     const root = await mkdtemp(join(tmpdir(), "ap-enc-cfg-"));
     await mkdir(projectVaultDir(root), { recursive: true });
     await writeEncryptionConfig(root, { opVault: "Personal", opItem: "demo-ap-age-key" });
@@ -29,14 +29,6 @@ describe("encryption config", () => {
     expect(content).toContain('op_vault = "Personal"');
     expect(content).toContain('op_item = "demo-ap-age-key"');
     expect(content.includes("op_account")).toBe(false);
-
-    let localExists = true;
-    try {
-      await access(join(projectVaultDir(root), "local.toml"));
-    } catch {
-      localExists = false;
-    }
-    expect(localExists).toBe(false);
   });
 });
 
@@ -63,7 +55,7 @@ describe("sopsYamlContent", () => {
 });
 
 describe("project init vault files", () => {
-  test("scaffolds secrets.json + config.toml without local.toml", async () => {
+  test("scaffolds secrets.json + config.toml", async () => {
     const root = await mkdtemp(join(tmpdir(), "ap-init-vault-"));
     await mkdir(projectVaultDir(root), { recursive: true });
     await writeTextFile(projectSecretsPath(root), "{}\n");
@@ -71,13 +63,5 @@ describe("project init vault files", () => {
 
     expect(await readFile(projectSecretsPath(root), "utf8")).toBe("{}\n");
     expect(await readFile(projectConfigPath(root), "utf8")).toContain("op_vault");
-
-    let exampleExists = true;
-    try {
-      await access(join(projectVaultDir(root), "local.toml.example"));
-    } catch {
-      exampleExists = false;
-    }
-    expect(exampleExists).toBe(false);
   });
 });

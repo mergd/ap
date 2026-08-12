@@ -8,6 +8,7 @@ describe("validateVarRules", () => {
       validateVarRules("CF_GLOBAL_API_KEY", "secret", {
         value: "abc",
         gitTracked: false,
+        fileScope: "global",
       }),
     ).not.toThrow();
   });
@@ -18,6 +19,7 @@ describe("validateVarRules", () => {
         value: "abc",
         gitTracked: true,
         setHint: "ap set DEPLOY_TOKEN",
+        fileScope: "global",
       }),
     ).toThrow(/git-tracked manifest/);
   });
@@ -41,24 +43,13 @@ describe("validateVarRules", () => {
     ).toThrow(/derive requires visibility = "public"/);
   });
 
-  test("rejects storage on global file scope", () => {
-    expect(() =>
-      validateVarRules("DEPLOY_TOKEN", "secret", {
-        storage: "secrets.json",
-        fileScope: "global",
-        gitTracked: false,
-      }),
-    ).toThrow(/requires scope = "project"/);
-  });
-
-  test("rejects value and storage together", () => {
+  test("rejects project secret with inline value", () => {
     expect(() =>
       validateVarRules("DEPLOY_TOKEN", "secret", {
         value: "abc",
-        storage: "secrets.json",
         fileScope: "project",
         gitTracked: false,
       }),
-    ).toThrow(/value or storage/);
+    ).toThrow(/ap set DEPLOY_TOKEN --project/);
   });
 });

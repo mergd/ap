@@ -4,7 +4,6 @@ import type {
   BundleDefinition,
   DeriveKind,
   Manifest,
-  ManifestStorage,
   Scope,
   VarDefinition,
   Visibility,
@@ -33,6 +32,12 @@ function parseVarEntry(key: string, raw: unknown, fileScope: Scope): VarDefiniti
     );
   }
 
+  if (entry.storage !== undefined) {
+    throw new Error(
+      `${key}: storage was removed — project secrets always live in .ap/secrets.json (use: ap set ${key} --project)`,
+    );
+  }
+
   const rawVisibility = entry.visibility;
 
   let visibility: Visibility;
@@ -48,16 +53,6 @@ function parseVarEntry(key: string, raw: unknown, fileScope: Scope): VarDefiniti
 
   const derive = entry.derive as DeriveKind | undefined;
 
-  let storage: ManifestStorage | undefined;
-  if (entry.storage !== undefined) {
-    if (entry.storage !== "secrets.json") {
-      throw new Error(
-        `${key}: invalid storage "${String(entry.storage)}" (expected secrets.json)`,
-      );
-    }
-    storage = "secrets.json";
-  }
-
   if (entry.value !== undefined && typeof entry.value !== "string") {
     throw new Error(`${key}: value must be a string`);
   }
@@ -70,27 +65,16 @@ function parseVarEntry(key: string, raw: unknown, fileScope: Scope): VarDefiniti
     throw new Error(`${key}: use either value or derive, not both`);
   }
 
-  if (storage && visibility !== "secret") {
-    throw new Error(`${key}: storage = "secrets.json" requires visibility = "secret"`);
-  }
-
-  if (storage && entry.value !== undefined) {
-    throw new Error(`${key}: use either value or storage = "secrets.json", not both`);
-  }
-
-  if (storage && derive) {
-    throw new Error(`${key}: storage is incompatible with derive`);
-  }
-
-  if (storage && fileScope !== "project") {
-    throw new Error(`${key}: storage = "secrets.json" requires scope = "project"`);
+  if (fileScope === "project" && visibility === "secret" && entry.value !== undefined) {
+    throw new Error(
+      `${key}: project secrets cannot use inline value — use: ap set ${key} --project`,
+    );
   }
 
   return {
     key,
     visibility,
     scope: fileScope,
-    storage,
     value: typeof entry.value === "string" ? entry.value : undefined,
     ask: typeof entry.ask === "string" ? entry.ask : undefined,
     docs: typeof entry.docs === "string" ? entry.docs : undefined,
@@ -135,7 +119,7 @@ function parseFileScope(raw: unknown, source: string, defaultScope?: Scope): Sco
   );
 }
 
-/** Infer file scope from path when TOML omits scope (migration / convenience). */
+/** Infer file scope from path when TOML omits scope (UI convenience). */
 export function defaultScopeForPath(path: string): Scope {
   return basename(path) === PROJECT_MANIFEST_NAME ? "project" : "global";
 }
@@ -198,317 +182,34 @@ export function parseManifestContent(
   return { version: 1, scope, vars, bundles, activeBundles };
 }
 
-export interface ManifestLoadResult {
-  manifest: Manifest | null;
-  /** Autofix was written back to disk */
-  repaired: boolean;
-  repairs: string[];
-  warnings: string[];
-}
-
-function asRecord(raw: unknown): Record<string, unknown> | null {
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
-  return raw as Record<string, unknown>;
-}
-
-function collectVarScopes(raw: RawManifest): Scope[] {
-  const scopes: Scope[] = [];
-  const take = (value: unknown) => {
-    const entry = asRecord(value);
-    if (!entry) return;
-    if (entry.scope === "global" || entry.scope === "project") scopes.push(entry.scope);
-  };
-  const nested = asRecord(raw.var);
-  if (nested) {
-    for (const value of Object.values(nested)) take(value);
-  }
-  for (const [key, value] of Object.entries(raw)) {
-    if (key.startsWith("var.")) take(value);
-  }
-  return scopes;
-}
-
-function resolveRepairScope(raw: RawManifest, defaultScope: Scope, repairs: string[]): Scope {
-  if (raw.scope === "global" || raw.scope === "project") return raw.scope;
-  const unique = [...new Set(collectVarScopes(raw))];
-  if (unique.length === 1) {
-    repairs.push(`backfilled scope = "${unique[0]}" from var declarations`);
-    return unique[0]!;
-  }
-  repairs.push(`backfilled scope = "${defaultScope}"`);
-  return defaultScope;
-}
-
-function repairVarEntry(
-  key: string,
-  raw: unknown,
-  fileScope: Scope,
-  repairs: string[],
-  warnings: string[],
-): VarDefinition | null {
-  const entry = asRecord(raw);
-  if (!entry) {
-    warnings.push(`skipped invalid var.${key}`);
-    return null;
-  }
-  if (entry.scope !== undefined) {
-    repairs.push(`removed [var.${key}] scope (file scope is ${fileScope})`);
-  }
-
-  let visibility: Visibility = "secret";
-  if (entry.visibility === "public" || entry.visibility === "secret") {
-    visibility = entry.visibility;
-  } else if (entry.visibility !== undefined) {
-    warnings.push(`${key}: invalid visibility — defaulting to secret`);
-  }
-
-  let storage: ManifestStorage | undefined;
-  if (entry.storage === "secrets.json") storage = "secrets.json";
-  else if (entry.storage !== undefined) {
-    warnings.push(`${key}: ignored invalid storage`);
-  }
-
-  const derive = entry.derive === "public-ipv4" ? ("public-ipv4" as DeriveKind) : undefined;
-  if (entry.derive !== undefined && !derive) {
-    warnings.push(`${key}: ignored invalid derive`);
-  }
-
-  let value = typeof entry.value === "string" ? entry.value : undefined;
-  if (entry.value !== undefined && value === undefined) {
-    warnings.push(`${key}: ignored non-string value`);
-  }
-
-  const effectiveDerive = derive && visibility === "public" ? derive : undefined;
-  if (derive && visibility !== "public") {
-    warnings.push(`${key}: derive requires public — cleared`);
-  }
-  if (effectiveDerive && value !== undefined) {
-    warnings.push(`${key}: both value and derive — kept derive`);
-    value = undefined;
-  }
-
-  if (storage && visibility !== "secret") {
-    warnings.push(`${key}: storage requires secret — cleared`);
-    storage = undefined;
-  }
-  if (storage && value !== undefined) {
-    warnings.push(`${key}: both value and storage — kept storage`);
-    value = undefined;
-  }
-  if (storage && fileScope !== "project") {
-    warnings.push(`${key}: storage only valid for project scope — cleared`);
-    storage = undefined;
-  }
-
-  return {
-    key,
-    visibility,
-    scope: fileScope,
-    storage,
-    value,
-    ask: typeof entry.ask === "string" ? entry.ask : undefined,
-    docs: typeof entry.docs === "string" ? entry.docs : undefined,
-    derive: effectiveDerive,
-  };
-}
-
-function repairBundleEntry(
-  name: string,
-  raw: unknown,
-  warnings: string[],
-): BundleDefinition | null {
-  const entry = asRecord(raw);
-  if (!entry) {
-    warnings.push(`skipped invalid bundle.${name}`);
-    return null;
-  }
-  if (!Array.isArray(entry.vars)) {
-    warnings.push(`skipped bundle.${name}: missing vars`);
-    return null;
-  }
-  const vars = entry.vars.filter((v): v is string => typeof v === "string");
-  if (vars.length === 0) {
-    warnings.push(`skipped bundle.${name}: empty vars`);
-    return null;
-  }
-  return {
-    name,
-    vars,
-    ask: typeof entry.ask === "string" ? entry.ask : undefined,
-    docs: typeof entry.docs === "string" ? entry.docs : undefined,
-    prompt: typeof entry.prompt === "string" ? entry.prompt : undefined,
-  };
-}
-
-/** Best-effort repair of legacy / broken manifests. Returns null if unrecoverable. */
-export function tryRepairManifestContent(
-  content: string,
-  source: string,
-  defaultScope: Scope,
-): { manifest: Manifest; repairs: string[]; warnings: string[]; content: string } | null {
-  let raw: RawManifest;
-  try {
-    raw = parse(content) as RawManifest;
-  } catch {
-    return null;
-  }
-
-  if (raw.version !== undefined && raw.version !== 1) return null;
-
-  const repairs: string[] = [];
-  const warnings: string[] = [];
-  const scope = resolveRepairScope(raw, defaultScope, repairs);
-  if (raw.version === undefined) repairs.push("added version = 1");
-
-  const manifest = emptyManifest(scope);
-  if (Array.isArray(raw.bundles)) {
-    manifest.activeBundles = raw.bundles.filter((b): b is string => typeof b === "string");
-  }
-
-  const nestedVar = asRecord(raw.var);
-  if (nestedVar) {
-    for (const [key, value] of Object.entries(nestedVar)) {
-      const def = repairVarEntry(key, value, scope, repairs, warnings);
-      if (def) manifest.vars.set(key, def);
-    }
-  }
-
-  const nestedBundle = asRecord(raw.bundle);
-  if (nestedBundle) {
-    for (const [name, value] of Object.entries(nestedBundle)) {
-      const def = repairBundleEntry(name, value, warnings);
-      if (def) manifest.bundles.set(name, def);
-    }
-  }
-
-  for (const [tomlKey, value] of Object.entries(raw)) {
-    if (SKIP_KEYS.has(tomlKey)) continue;
-    if (tomlKey.startsWith("var.")) {
-      const def = repairVarEntry(tomlKey.slice(4), value, scope, repairs, warnings);
-      if (def) manifest.vars.set(def.key, def);
-      continue;
-    }
-    if (tomlKey.startsWith("bundle.")) {
-      const def = repairBundleEntry(tomlKey.slice(7), value, warnings);
-      if (def) manifest.bundles.set(def.name, def);
-      continue;
-    }
-    warnings.push(`ignored unknown top-level key "${tomlKey}"`);
-  }
-
-  const serialized = serializeManifest(manifest);
-  try {
-    parseManifestContent(serialized, source, { defaultScope: scope });
-  } catch {
-    return null;
-  }
-
-  return { manifest, repairs, warnings, content: serialized };
-}
-
-function warnManifest(path: string, message: string): void {
-  console.error(`ap: ${message} (${path})`);
-}
-
 /**
- * Load a manifest. Autofixes legacy layouts (missing file-level scope, per-var scope)
- * and returns null for unreadable/invalid files instead of throwing.
+ * Load a manifest. Returns null for missing/unreadable/invalid files.
+ * Requires scope in the file (no defaultScope / autofix on load).
  */
-export async function loadManifest(
-  path: string,
-  options?: { autofix?: boolean },
-): Promise<Manifest | null> {
-  const result = await loadManifestDetailed(path, options);
-  return result.manifest;
-}
-
-export async function loadManifestDetailed(
-  path: string,
-  options?: { autofix?: boolean },
-): Promise<ManifestLoadResult> {
-  const autofix = options?.autofix !== false;
-  const defaultScope = defaultScopeForPath(path);
-  const empty: ManifestLoadResult = {
-    manifest: null,
-    repaired: false,
-    repairs: [],
-    warnings: [],
-  };
-
+export async function loadManifest(path: string): Promise<Manifest | null> {
   let content: string;
   try {
     content = await readTextFile(path);
   } catch (err) {
-    if (isNotFound(err)) return empty;
-    warnManifest(path, `could not read manifest: ${err instanceof Error ? err.message : String(err)}`);
-    return empty;
+    if (isNotFound(err)) return null;
+    console.error(
+      `ap: could not read manifest: ${err instanceof Error ? err.message : String(err)} (${path})`,
+    );
+    return null;
   }
 
   try {
-    const manifest = parseManifestContent(content, path, { defaultScope });
-    // Strict parse can succeed via defaultScope while the file still omits scope=.
-    let raw: RawManifest | null = null;
-    try {
-      raw = parse(content) as RawManifest;
-    } catch {
-      raw = null;
-    }
-    if (raw && raw.scope === undefined && autofix) {
-      const repaired = tryRepairManifestContent(content, path, defaultScope);
-      if (repaired && repaired.repairs.length > 0) {
-        await saveManifestContent(path, repaired.manifest);
-        warnManifest(path, `autofixed manifest — ${repaired.repairs.join("; ")}`);
-        return {
-          manifest: repaired.manifest,
-          repaired: true,
-          repairs: repaired.repairs,
-          warnings: repaired.warnings,
-        };
-      }
-    }
-    return { manifest, repaired: false, repairs: [], warnings: [] };
-  } catch (strictErr) {
-    const repaired = tryRepairManifestContent(content, path, defaultScope);
-    if (!repaired) {
-      warnManifest(
-        path,
-        `ignoring invalid manifest: ${strictErr instanceof Error ? strictErr.message : String(strictErr)}`,
-      );
-      return empty;
-    }
-
-    if (autofix) {
-      try {
-        await saveManifestContent(path, repaired.manifest);
-        warnManifest(path, `autofixed manifest — ${repaired.repairs.join("; ")}`);
-      } catch (writeErr) {
-        warnManifest(
-          path,
-          `repaired in-memory but could not write: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}`,
-        );
-        return {
-          manifest: repaired.manifest,
-          repaired: false,
-          repairs: repaired.repairs,
-          warnings: repaired.warnings,
-        };
-      }
-    } else {
-      warnManifest(path, `using repaired manifest (not written) — ${repaired.repairs.join("; ")}`);
-    }
-
-    return {
-      manifest: repaired.manifest,
-      repaired: autofix,
-      repairs: repaired.repairs,
-      warnings: repaired.warnings,
-    };
+    return parseManifestContent(content, path);
+  } catch (err) {
+    console.error(
+      `ap: ignoring invalid manifest: ${err instanceof Error ? err.message : String(err)} (${path})`,
+    );
+    return null;
   }
 }
 
 function serializeVarBlock(key: string, def: VarDefinition): string[] {
   const lines: string[] = [`[var.${key}]`, `visibility = "${def.visibility}"`];
-  if (def.storage) lines.push(`storage = "${def.storage}"`);
   if (def.value !== undefined) lines.push(`value = ${JSON.stringify(def.value)}`);
   if (def.ask) lines.push(`ask = ${JSON.stringify(def.ask)}`);
   if (def.docs) lines.push(`docs = ${JSON.stringify(def.docs)}`);
