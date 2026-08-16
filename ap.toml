@@ -3,3 +3,7 @@ scope = "project"
 
 # Opt into catalog / global bundles (definitions fall back to built-in catalog)
 bundles = ["namecheap", "cloudflare"]
+
+[encryption]
+op_vault = "Personal"
+op_item = "aport-ap-age-key"

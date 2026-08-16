@@ -4,7 +4,7 @@ import {
   parseManifestContent,
   serializeManifest,
 } from "./manifest.ts";
-import type { BundleDefinition, Manifest, Scope, VarDefinition } from "./types.ts";
+import type { BundleDefinition, Manifest, ManifestEncryption, Scope, VarDefinition } from "./types.ts";
 
 export type UiMode = "project" | "global";
 
@@ -33,6 +33,8 @@ export interface UiManifestModel {
   bundles: UiBundle[];
   vars: UiVar[];
   catalog: string[];
+  /** Preserved from ap.toml; not edited in the UI form. */
+  encryption?: ManifestEncryption;
 }
 
 function modeScope(mode: UiMode): Scope {
@@ -107,6 +109,7 @@ export function manifestToUiModel(manifest: Manifest, mode: UiMode): UiManifestM
       .sort((a, b) => a.key.localeCompare(b.key))
       .map(varToUi),
     catalog: listCatalogBundles(),
+    ...(manifest.encryption ? { encryption: { ...manifest.encryption } } : {}),
   };
 }
 
@@ -118,6 +121,10 @@ export function uiModelToManifest(model: UiManifestModel): Manifest {
   if (model.mode === "project") {
     manifest.activeBundles = [...new Set(model.activeBundles.map((b) => b.trim()).filter(Boolean))]
       .sort((a, b) => a.localeCompare(b));
+  }
+
+  if (model.encryption) {
+    manifest.encryption = { ...model.encryption };
   }
 
   for (const bundle of model.bundles) {

@@ -66,10 +66,9 @@ ap skill install --project    # same paths under current repo
 | File | Purpose |
 |------|---------|
 | `~/.config/ap/manifest.toml` | Global public vars **and secret values** (`value =`) |
-| `ap.toml` | Which bundles this repo uses; project var declarations (no secret values) |
+| `ap.toml` | Which bundles this repo uses; project var declarations; `[encryption]` for 1Password age key |
 | `.ap/secrets.json` | Project vault — all project-scoped secrets (SOPS after `ap setup`) |
 | `.sops.yaml` | SOPS encryption rules (committed after `ap setup`) |
-| `.ap/config.toml` | 1Password vault/item for age key (committed) |
 
 There is **no** global `secrets.json`. Project secrets always live in `.ap/secrets.json`:
 

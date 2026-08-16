@@ -33,7 +33,7 @@ export function buildAgentGuide(): AgentGuide {
       global_manifest: globalManifestPath(),
       project_toml: "ap.toml",
       project_secrets: ".ap/secrets.json",
-      project_encryption: ".sops.yaml + .ap/config.toml (run ap setup)",
+      project_encryption: ".sops.yaml + ap.toml [encryption] (run ap setup)",
       global_home: globalHome(),
     },
   };

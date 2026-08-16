@@ -20,6 +20,26 @@
       "type": "array",
       "items": { "type": "string" },
       "description": "Project manifest: capability bundles this repo uses"
+    },
+    "encryption": {
+      "type": "object",
+      "description": "SOPS age key stored in 1Password (project manifests)",
+      "required": ["op_vault", "op_item"],
+      "properties": {
+        "op_vault": {
+          "type": "string",
+          "description": "1Password vault name containing the age key"
+        },
+        "op_item": {
+          "type": "string",
+          "description": "1Password item name for the age key"
+        },
+        "op_account": {
+          "type": "string",
+          "description": "Optional 1Password account shorthand"
+        }
+      },
+      "additionalProperties": false
     }
   },
   "patternProperties": {

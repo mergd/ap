@@ -6,7 +6,7 @@ import { expect } from "./expect.ts";
 import { writeEncryptionConfig, defaultOpItem, sopsKeyRef } from "../src/encryption/config.ts";
 import { initEncryptionConfig } from "../src/encryption/setup.ts";
 import { isSopsEncrypted, sopsYamlContent } from "../src/encryption/sops.ts";
-import { projectConfigPath, projectSecretsPath, projectVaultDir } from "../src/paths.ts";
+import { projectManifestPath, projectSecretsPath, projectVaultDir } from "../src/paths.ts";
 import { writeTextFile } from "../src/fs-helpers.ts";
 
 describe("encryption config", () => {
@@ -20,12 +20,12 @@ describe("encryption config", () => {
     ).toBe("op://Personal/my-app-ap-age-key/password");
   });
 
-  test("writes config.toml", async () => {
+  test("writes [encryption] into ap.toml", async () => {
     const root = await mkdtemp(join(tmpdir(), "ap-enc-cfg-"));
-    await mkdir(projectVaultDir(root), { recursive: true });
     await writeEncryptionConfig(root, { opVault: "Personal", opItem: "demo-ap-age-key" });
 
-    const content = await readFile(projectConfigPath(root), "utf8");
+    const content = await readFile(projectManifestPath(root), "utf8");
+    expect(content).toContain("[encryption]");
     expect(content).toContain('op_vault = "Personal"');
     expect(content).toContain('op_item = "demo-ap-age-key"');
     expect(content.includes("op_account")).toBe(false);
@@ -55,13 +55,20 @@ describe("sopsYamlContent", () => {
 });
 
 describe("project init vault files", () => {
-  test("scaffolds secrets.json + config.toml", async () => {
+  test("scaffolds secrets.json + ap.toml [encryption]", async () => {
     const root = await mkdtemp(join(tmpdir(), "ap-init-vault-"));
     await mkdir(projectVaultDir(root), { recursive: true });
+    await writeTextFile(
+      projectManifestPath(root),
+      `version = 1\nscope = "project"\nbundles = []\n`,
+    );
     await writeTextFile(projectSecretsPath(root), "{}\n");
     await initEncryptionConfig(root);
 
     expect(await readFile(projectSecretsPath(root), "utf8")).toBe("{}\n");
-    expect(await readFile(projectConfigPath(root), "utf8")).toContain("op_vault");
+    const manifest = await readFile(projectManifestPath(root), "utf8");
+    expect(manifest).toContain("[encryption]");
+    expect(manifest).toContain("op_vault");
+    expect(manifest).toContain('bundles = []');
   });
 });

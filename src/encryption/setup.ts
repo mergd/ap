@@ -84,7 +84,7 @@ export function formatSetupHuman(result: SetupResult): string {
   }
 
   lines.push("");
-  lines.push("Commit .sops.yaml, .ap/config.toml, and .ap/secrets.json to share secrets safely.");
+  lines.push("Commit .sops.yaml, ap.toml, and .ap/secrets.json to share secrets safely.");
 
   return lines.join("\n");
 }

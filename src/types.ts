@@ -26,6 +26,12 @@ export interface BundleDefinition {
   prompt?: string;
 }
 
+export interface ManifestEncryption {
+  opVault: string;
+  opItem: string;
+  opAccount?: string;
+}
+
 export interface Manifest {
   version: number;
   /** Where vars defined in this file are stored. Declared once at the top of the TOML. */
@@ -34,6 +40,8 @@ export interface Manifest {
   bundles: Map<string, BundleDefinition>;
   /** Project manifest: which bundles this repo uses */
   activeBundles?: string[];
+  /** Project encryption: 1Password vault/item for the age key (SOPS) */
+  encryption?: ManifestEncryption;
 }
 
 export interface ResolvedVar {

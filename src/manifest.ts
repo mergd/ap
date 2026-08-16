@@ -4,6 +4,7 @@ import type {
   BundleDefinition,
   DeriveKind,
   Manifest,
+  ManifestEncryption,
   Scope,
   VarDefinition,
   Visibility,
@@ -124,7 +125,31 @@ export function defaultScopeForPath(path: string): Scope {
   return basename(path) === PROJECT_MANIFEST_NAME ? "project" : "global";
 }
 
-const SKIP_KEYS = new Set(["version", "scope", "var", "bundle", "bundles"]);
+const SKIP_KEYS = new Set(["version", "scope", "var", "bundle", "bundles", "encryption"]);
+
+function parseEncryption(raw: unknown, source: string): ManifestEncryption | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new Error(`${source}: [encryption] must be a table`);
+  }
+
+  const entry = raw as Record<string, unknown>;
+  if (typeof entry.op_vault !== "string" || !entry.op_vault) {
+    throw new Error(`${source}: [encryption] requires op_vault`);
+  }
+  if (typeof entry.op_item !== "string" || !entry.op_item) {
+    throw new Error(`${source}: [encryption] requires op_item`);
+  }
+  if (entry.op_account !== undefined && typeof entry.op_account !== "string") {
+    throw new Error(`${source}: [encryption].op_account must be a string`);
+  }
+
+  return {
+    opVault: entry.op_vault,
+    opItem: entry.op_item,
+    ...(typeof entry.op_account === "string" ? { opAccount: entry.op_account } : {}),
+  };
+}
 
 export function parseManifestContent(
   content: string,
@@ -179,7 +204,9 @@ export function parseManifestContent(
     activeBundles = raw.bundles.filter((b): b is string => typeof b === "string");
   }
 
-  return { version: 1, scope, vars, bundles, activeBundles };
+  const encryption = parseEncryption(raw.encryption, source);
+
+  return { version: 1, scope, vars, bundles, activeBundles, encryption };
 }
 
 /**
@@ -234,6 +261,16 @@ export function serializeManifest(manifest: Manifest): string {
 
   if (manifest.activeBundles !== undefined) {
     lines.push(`bundles = ${JSON.stringify(manifest.activeBundles)}`);
+    lines.push("");
+  }
+
+  if (manifest.encryption) {
+    lines.push("[encryption]");
+    lines.push(`op_vault = ${JSON.stringify(manifest.encryption.opVault)}`);
+    lines.push(`op_item = ${JSON.stringify(manifest.encryption.opItem)}`);
+    if (manifest.encryption.opAccount) {
+      lines.push(`op_account = ${JSON.stringify(manifest.encryption.opAccount)}`);
+    }
     lines.push("");
   }
 

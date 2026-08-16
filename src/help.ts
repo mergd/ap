@@ -98,7 +98,7 @@ const topics: Record<string, string> = {
   ap setup
 
   Syncs age key to 1Password, writes .sops.yaml, encrypts .ap/secrets.json.
-  Commit .sops.yaml, .ap/config.toml, and encrypted secrets to share safely.
+  Commit .sops.yaml, ap.toml, and encrypted secrets to share safely.
 
   Requires: op (1Password CLI), sops, age
   Run first: eval "$(op signin)"
@@ -106,7 +106,7 @@ const topics: Record<string, string> = {
   Examples:
     ap init
     ap setup
-    git add .sops.yaml .ap/`,
+    git add .sops.yaml ap.toml .ap/`,
 
   init: `ap init — scaffold project or global manifest
 
