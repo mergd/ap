@@ -1,6 +1,6 @@
 {
   "name": "@mergd/ap",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Agent-portable local secrets — bundles, show, ap run",
   "type": "module",
   "license": "MIT",
