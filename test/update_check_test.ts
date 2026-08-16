@@ -6,7 +6,9 @@ import { expect } from "./expect.ts";
 import {
   checkForUpdate,
   formatUpdateNotice,
+  formatVersionOutput,
   isNewerVersion,
+  lookupLatestVersion,
   readCurrentVersion,
 } from "../src/update-check.ts";
 
@@ -60,6 +62,45 @@ describe("update check", () => {
       });
       expect(formatUpdateNotice(first!)).toContain("0.3.0 → 0.3.1");
       expect(second).toBe(null);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("formats --version with latest and update instructions", () => {
+    expect(formatVersionOutput("0.3.3", "0.3.3")).toBe("0.3.3\nlatest 0.3.3 — up to date");
+    expect(formatVersionOutput("0.3.3", "0.4.0")).toBe(
+      "0.3.3\nlatest 0.4.0 — update with: npm install -g @mergd/ap@latest",
+    );
+    expect(formatVersionOutput("0.3.3", null)).toBe("0.3.3\nlatest unknown");
+  });
+
+  test("lookupLatestVersion polls even when the nag cache is fresh", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ap-update-"));
+    const cachePath = join(dir, "update-check.json");
+    let polls = 0;
+    const fetchLatest = async () => {
+      polls++;
+      return "0.4.0";
+    };
+
+    try {
+      await checkForUpdate({
+        currentVersion: "0.3.3",
+        cachePath,
+        now: 1_000_000,
+        env: {},
+        fetchLatest,
+      });
+      const latest = await lookupLatestVersion({
+        cachePath,
+        now: 1_000_001,
+        env: {},
+        fetchLatest,
+      });
+
+      expect(polls).toBe(2);
+      expect(latest).toBe("0.4.0");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

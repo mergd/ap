@@ -38,7 +38,13 @@ import {
   showToAgentOutput,
   stripOutputFlags,
 } from "./agent-output.ts";
-import { checkForUpdate, formatUpdateNotice, readCurrentVersion } from "./update-check.ts";
+import {
+  checkForUpdate,
+  formatUpdateNotice,
+  formatVersionOutput,
+  lookupLatestVersion,
+  readCurrentVersion,
+} from "./update-check.ts";
 import { startUi } from "./ui.ts";
 
 function usage(): void {
@@ -196,7 +202,6 @@ async function cmdInit(global: boolean, bundleNames: string[]): Promise<void> {
 
   console.log(`Created ${manifestPath}`);
   console.log(`Created ${projectSecretsPath(root)}`);
-  console.log(`Created ${projectVaultDir(root)}/config.toml`);
   console.log(`Installed skill →`);
   for (const dest of skillDests) {
     console.log(`  ${dest}`);
@@ -392,7 +397,9 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
   if (args.includes("--version") || args.includes("-V")) {
-    console.log(await readCurrentVersion());
+    const current = await readCurrentVersion();
+    const latest = await lookupLatestVersion();
+    console.log(formatVersionOutput(current, latest));
     return;
   }
 

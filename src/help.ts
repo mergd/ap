@@ -140,7 +140,7 @@ function mainHelp(): string {
 
 Usage:
   ap help [topic]                  Per-command help
-  ap -V, --version                 Print version
+  ap -V, --version                 Print version and update status
 
   ap guide [--human]               Agent contract
   ap show [BUNDLE] [--check]       Readiness (YAML default)

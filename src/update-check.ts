@@ -8,6 +8,7 @@ const PACKAGE_NAME = "@mergd/ap";
 const REGISTRY_URL = "https://registry.npmjs.org/@mergd%2Fap/latest";
 const DEFAULT_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 1_500;
+export const UPDATE_COMMAND = `npm install -g ${PACKAGE_NAME}@latest`;
 
 interface UpdateCache {
   checked_at: number;
@@ -125,11 +126,49 @@ export async function checkForUpdate(
     return {
       current,
       latest,
-      command: `npm install -g ${PACKAGE_NAME}@latest`,
+      command: UPDATE_COMMAND,
     };
   } catch {
     return null;
   }
+}
+
+/** Always poll (or reuse cache on failure). Used by `ap --version`. */
+export async function lookupLatestVersion(
+  options: UpdateCheckOptions = {},
+): Promise<string | null> {
+  const env = options.env ?? process.env;
+  if (disabled(env)) return null;
+
+  const now = options.now ?? Date.now();
+  const cachePath = options.cachePath ?? join(globalHome(), "update-check.json");
+
+  try {
+    const cache = await readCache(cachePath);
+    let latest = cache?.latest;
+    try {
+      latest = await (options.fetchLatest ?? fetchLatestVersion)();
+    } catch {
+      // keep cached latest
+    }
+
+    await writeCache(cachePath, {
+      checked_at: now,
+      ...(latest ? { latest } : {}),
+    });
+
+    return latest ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function formatVersionOutput(current: string, latest: string | null): string {
+  if (!latest) return `${current}\nlatest unknown`;
+  if (isNewerVersion(latest, current)) {
+    return `${current}\nlatest ${latest} — update with: ${UPDATE_COMMAND}`;
+  }
+  return `${current}\nlatest ${latest} — up to date`;
 }
 
 export function formatUpdateNotice(notice: UpdateNotice): string {

@@ -99,7 +99,7 @@ ap help               # full command reference
 ## Commands
 
 ```
-ap -V, --version                 Print version
+ap -V, --version                 Print version and update status
 ap guide [--human]               Agent contract (primary entrypoint for agents)
 ap show [BUNDLE] [-g] [--check] [--validate]
 ap catalog
