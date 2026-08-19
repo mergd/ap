@@ -74,7 +74,7 @@ value = "nope"
 `,
         "ap.toml",
       ),
-    ).toThrow(/ap set FOO --project/);
+    ).toThrow(/ap set FOO/);
   });
 
   test("rejects storage even on global scope", () => {
@@ -208,7 +208,7 @@ describe("resolveVar", () => {
 
     const resolved = await resolveVar(emptyCtx(), def);
     expect(resolved.status).toBe("missing");
-    expect(resolved.set_with).toBe("ap set NC_API_KEY");
+    expect(resolved.set_with).toBe("ap set NC_API_KEY --global");
   });
 
   test("reads inline secret from manifest", async () => {

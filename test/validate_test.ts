@@ -18,7 +18,7 @@ describe("validateVarRules", () => {
       validateVarRules("DEPLOY_TOKEN", "secret", {
         value: "abc",
         gitTracked: true,
-        setHint: "ap set DEPLOY_TOKEN",
+        setHint: "ap set DEPLOY_TOKEN --global",
         fileScope: "global",
       }),
     ).toThrow(/git-tracked manifest/);
@@ -50,6 +50,6 @@ describe("validateVarRules", () => {
         fileScope: "project",
         gitTracked: false,
       }),
-    ).toThrow(/ap set DEPLOY_TOKEN --project/);
+    ).toThrow(/ap set DEPLOY_TOKEN/);
   });
 });

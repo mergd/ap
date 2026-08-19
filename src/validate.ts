@@ -29,12 +29,12 @@ export function validateVarRules(
 
   if (fileScope === "project" && visibility === "secret" && value !== undefined) {
     throw new Error(
-      `${key}: project secrets cannot use inline value — use: ap set ${key} --project`,
+      `${key}: project secrets cannot use inline value — use: ap set ${key}`,
     );
   }
 
   if (visibility === "secret" && value !== undefined && gitTracked) {
-    const hint = setHint ?? `ap set ${key}`;
+    const hint = setHint ?? `ap set ${key} --global`;
     throw new Error(
       `${key}: secret value in a git-tracked manifest — keep this file out of git or use global home (${hint})`,
     );
@@ -60,7 +60,7 @@ export async function validateManifest(
 
   for (const [key, def] of manifest.vars) {
     const scope = def.scope ?? manifest.scope;
-    const setHint = scope === "project" ? `ap set ${key} --project` : `ap set ${key}`;
+    const setHint = scope === "global" ? `ap set ${key} --global` : `ap set ${key}`;
 
     validateVarRules(key, def.visibility, {
       value: def.value,
@@ -175,7 +175,7 @@ async function validateProjectSecrets(
       report.ok = false;
       report.errors.push(err instanceof Error ? err.message : String(err));
     } else if (hasSecretVars) {
-      report.warnings.push("missing secrets.json — run: ap set KEY --project");
+      report.warnings.push("missing secrets.json — run: ap set KEY");
     }
   }
 

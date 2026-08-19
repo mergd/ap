@@ -69,7 +69,7 @@ export function mergeDefinition(
 }
 
 function setWithCommand(key: string, scope: Scope): string {
-  return scope === "project" ? `ap set ${key} --project` : `ap set ${key}`;
+  return scope === "global" ? `ap set ${key} --global` : `ap set ${key}`;
 }
 
 export async function resolveVar(

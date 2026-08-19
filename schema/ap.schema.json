@@ -53,7 +53,7 @@
         },
         "value": {
           "type": "string",
-          "description": "Inline value in TOML (global secrets or public vars; project secrets use .ap/secrets.json via ap set --project; mutually exclusive with derive)"
+          "description": "Inline value in TOML (global secrets or public vars; project secrets use .ap/secrets.json via ap set; mutually exclusive with derive)"
         },
         "ask": {
           "type": "string",

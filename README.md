@@ -35,12 +35,12 @@ ap init                         # ap.toml + .ap/ + project agent skill
 eval "$(op signin)"
 ap setup                        # SOPS + 1Password — safe to commit .ap/secrets.json
 
-# Set secrets (global by default → value= in manifest.toml)
-echo "$NC_API_KEY" | ap set NC_API_KEY
-echo "$KEY" | ap set CF_GLOBAL_API_KEY
+# Set project secrets (default → .ap/secrets.json)
+echo "$TOKEN" | ap set DEPLOY_TOKEN
 
-# Project vault (.ap/secrets.json)
-echo "$TOKEN" | ap set DEPLOY_TOKEN --project
+# Set deliberately shared credentials globally (explicit opt-in)
+echo "$NC_API_KEY" | ap set NC_API_KEY --global
+echo "$KEY" | ap set CF_GLOBAL_API_KEY --global
 
 # Inspect secrets and check readiness
 ap show --check
@@ -83,7 +83,7 @@ ask = "Deploy token for this repo"
 ```
 
 ```bash
-echo "$TOKEN" | ap set DEPLOY_TOKEN --project
+echo "$TOKEN" | ap set DEPLOY_TOKEN
 ```
 
 Project secrets use **SOPS + age** with the private key in **1Password** (same pattern as [lockbox](https://github.com/mergd/lockbox)). Run `ap setup` once per repo; teammates need `op` access to decrypt.
@@ -103,8 +103,8 @@ ap -V, --version                 Print version and update status
 ap guide [--human]               Agent contract (primary entrypoint for agents)
 ap show [BUNDLE] [-g] [--check] [--validate]
 ap catalog
-ap set KEY [-g|--project] [--from-env]
-ap unset KEY [-g|--project]
+ap set KEY [-g|--global|--project] [--from-env]
+ap unset KEY [-g|--global|--project]
 ap run [BUNDLE] -- <cmd...>
 ap init [-g|--global] [BUNDLE...]
 ap setup
@@ -112,7 +112,7 @@ ap edit <secrets|global|project> [--ui] [--port N] [--no-open]
 ap skill install [--project]
 ```
 
-`-g` is short for `--global`. `ap set` defaults to writing `value` in the global manifest; use `--project` for the repo vault (`.ap/secrets.json`).
+`ap set` and `ap unset` default to the current repo vault (`.ap/secrets.json`). `-g` is short for `--global` and is required to modify the global manifest. `--project` remains as an explicit, backward-compatible spelling of the default.
 
 `ap edit --ui` opens a local Bootstrap-era page on `127.0.0.1` to edit project `ap.toml` (or `-g` / `global` for `manifest.toml`, including global secret values).
 

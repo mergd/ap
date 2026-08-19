@@ -126,6 +126,8 @@ export interface AgentGuide {
   workflow: Array<Record<string, string>>;
   rules: {
     prefer_bundle: boolean;
+    default_secret_scope: Scope;
+    global_requires_flag: boolean;
   };
   commands: Record<string, string>;
   paths: Record<string, string>;

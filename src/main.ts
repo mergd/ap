@@ -82,13 +82,13 @@ async function requireProjectRoot(): Promise<string> {
   return root;
 }
 
-/** Default scope is global; --project selects the repo vault. -g/--global kept as explicit. */
-function resolveSetScope(args: string[]): Scope {
+/** Default scope is project; -g/--global explicitly selects the global manifest. */
+export function resolveSetScope(args: string[]): Scope {
   if (args.includes("--project") && hasGlobalFlag(args)) {
     console.error("Error: use either --project or -g/--global, not both");
     process.exit(1);
   }
-  return args.includes("--project") ? "project" : "global";
+  return hasGlobalFlag(args) ? "global" : "project";
 }
 
 /** Ensure a secret var stub exists in the target manifest. */

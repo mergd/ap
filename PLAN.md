@@ -72,7 +72,7 @@ Use XDG `~/.config/ap/` (override via `AP_GLOBAL_HOME`). Project discovery: walk
 | Location | How values are stored |
 |----------|------------------------|
 | Global | Inline `value = "..."` in `manifest.toml` (no `secrets.json`) |
-| Project vault | Declare `storage = "secrets.json"` on the var, then `ap set KEY --project` |
+| Project vault | Declare a project secret var, then `ap set KEY` |
 | Project inline | `value = "..."` only when `ap.toml` is not git-tracked |
 
 **Resolution for secrets:**

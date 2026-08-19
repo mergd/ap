@@ -2,7 +2,7 @@ import { globalHome, globalManifestPath } from "./paths.ts";
 import type { AgentGuide } from "./types.ts";
 import { printMachineOutput, type OutputFormat } from "./agent-output.ts";
 
-const GUIDE_VERSION = 4;
+const GUIDE_VERSION = 5;
 
 export function buildAgentGuide(): AgentGuide {
   return {
@@ -20,6 +20,8 @@ export function buildAgentGuide(): AgentGuide {
     ],
     rules: {
       prefer_bundle: true,
+      default_secret_scope: "project",
+      global_requires_flag: true,
     },
     commands: {
       guide: "ap guide [--human]",

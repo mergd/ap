@@ -54,7 +54,8 @@ Local secrets for agents. Bundles group related creds (e.g. \`cloudflare\`, \`na
 ## Rules
 
 - Prefer a named bundle on \`show\` / \`run\`
-- Set secrets via stdin (global by default): \`echo "$KEY" | ap set KEY\`
+- Set secrets via stdin; project scope is the default: \`echo "$KEY" | ap set KEY\`
+- Use \`--global\` only when the credential is intentionally shared across repositories
 - Use \`sh -c\` under \`ap run\` when the command needs \`$VAR\` expansion
 - Discover templates: \`ap catalog\`
 

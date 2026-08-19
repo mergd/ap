@@ -35,7 +35,7 @@ function parseVarEntry(key: string, raw: unknown, fileScope: Scope): VarDefiniti
 
   if (entry.storage !== undefined) {
     throw new Error(
-      `${key}: storage was removed — project secrets always live in .ap/secrets.json (use: ap set ${key} --project)`,
+      `${key}: storage was removed — project secrets always live in .ap/secrets.json (use: ap set ${key})`,
     );
   }
 
@@ -68,7 +68,7 @@ function parseVarEntry(key: string, raw: unknown, fileScope: Scope): VarDefiniti
 
   if (fileScope === "project" && visibility === "secret" && entry.value !== undefined) {
     throw new Error(
-      `${key}: project secrets cannot use inline value — use: ap set ${key} --project`,
+      `${key}: project secrets cannot use inline value — use: ap set ${key}`,
     );
   }
 

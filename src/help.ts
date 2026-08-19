@@ -48,7 +48,7 @@ const topics: Record<string, string> = {
   --port N        listen port (default 4789)
   --no-open       print URL only (don't open browser)
 
-  Project vault values: ap edit secrets / ap set KEY --project.
+  Project vault values: ap edit secrets / ap set KEY.
 
   Examples:
     ap edit secrets
@@ -70,28 +70,28 @@ const topics: Record<string, string> = {
     ap run cloudflare -- sh -c \\
       'curl -sS -H "X-Auth-Email: $CF_GLOBAL_EMAIL" -H "X-Auth-Key: $CF_GLOBAL_API_KEY" https://api.cloudflare.com/client/v4/user'`,
 
-  set: `ap set — store a secret (global by default)
+  set: `ap set — store a secret (project by default)
 
-  ap set KEY                          stdin → value in ~/.config/ap/manifest.toml
-  ap set KEY --project                stdin → .ap/secrets.json
-  ap set KEY --from-env [--project]   copy from process.env
-  ap set KEY -g|--global              same as default (explicit)
-
-  Examples:
-    echo "$KEY" | ap set NC_API_KEY
-    ap set NC_API_KEY --from-env
-    echo "$TOKEN" | ap set DEPLOY_TOKEN --project`,
-
-  unset: `ap unset — remove a secret (global by default)
-
-  ap unset KEY [--project]
-
-  Global: clears value in manifest.toml.
-  Project: removes key from .ap/secrets.json.
+  ap set KEY                          stdin → .ap/secrets.json
+  ap set KEY --project                same as default (backward-compatible explicit form)
+  ap set KEY --from-env               copy from process.env into .ap/secrets.json
+  ap set KEY -g|--global              stdin → value in ~/.config/ap/manifest.toml
 
   Examples:
-    ap unset NC_API_KEY
-    ap unset DEPLOY_TOKEN --project`,
+    echo "$TOKEN" | ap set DEPLOY_TOKEN
+    ap set DEPLOY_TOKEN --from-env
+    echo "$KEY" | ap set NC_API_KEY --global`,
+
+  unset: `ap unset — remove a secret (project by default)
+
+  ap unset KEY [-g|--global|--project]
+
+  Project (default): removes key from .ap/secrets.json.
+  Global (--global): clears value in manifest.toml.
+
+  Examples:
+    ap unset DEPLOY_TOKEN
+    ap unset NC_API_KEY --global`,
 
   setup: `ap setup — enable SOPS encryption via 1Password
 
@@ -145,8 +145,8 @@ Usage:
   ap guide [--human]               Agent contract
   ap show [BUNDLE] [--check]       Readiness (YAML default)
   ap catalog                       Built-in bundle templates
-  ap set KEY [--project] [--from-env]
-  ap unset KEY [--project]
+  ap set KEY [-g|--global|--project] [--from-env]
+  ap unset KEY [-g|--global|--project]
   ap run [BUNDLE] -- <cmd...>
   ap init [-g|--global] [BUNDLE...]
   ap setup                         Encrypt project secrets (SOPS + 1Password)

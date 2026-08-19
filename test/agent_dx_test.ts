@@ -11,9 +11,11 @@ import { generateSkillMarkdown, installSkill, skillDirs, checkSkillInstallTip } 
 describe("ap guide", () => {
   test("buildAgentGuide has required fields", () => {
     const guide = buildAgentGuide();
-    expect(guide.version).toBe(4);
+    expect(guide.version).toBe(5);
     expect(guide.workflow.length > 0).toBe(true);
     expect(guide.rules.prefer_bundle).toBe(true);
+    expect(guide.rules.default_secret_scope).toBe("project");
+    expect(guide.rules.global_requires_flag).toBe(true);
     expect(guide.commands.show).toContain("ap show");
     expect(guide.commands.catalog).toContain("ap catalog");
     expect(guide.paths.global_manifest).toContain("manifest.toml");
@@ -28,7 +30,7 @@ describe("ap guide", () => {
 
   test("guide serializes to YAML without tables", () => {
     const yaml = yamlStringify(buildAgentGuide());
-    expect(yaml).toContain("version: 4");
+    expect(yaml).toContain("version: 5");
     expect(yaml).toContain("prefer_bundle: true");
     expect(yaml.includes("never_request_secrets")).toBe(false);
     expect(yaml.includes("| ---")).toBe(false);
@@ -54,7 +56,7 @@ describe("ap show YAML shape", () => {
         { key: "CF_EMAIL", scope: "global", storage: "inline", visibility: "public", status: "set", value: "user@example.com" },
         { key: "CF_KEY", scope: "global", storage: "inline", visibility: "secret", status: "set", masked: true },
         { key: "OTHER_TOKEN", scope: "global", storage: "inline", visibility: "secret", status: "set", value: "must-not-show" },
-        { key: "MISSING_TOKEN", scope: "global", storage: "inline", visibility: "secret", status: "missing", set_with: "ap set MISSING_TOKEN" },
+        { key: "MISSING_TOKEN", scope: "global", storage: "inline", visibility: "secret", status: "missing", set_with: "ap set MISSING_TOKEN --global" },
       ],
     });
 
@@ -62,9 +64,9 @@ describe("ap show YAML shape", () => {
     expect(out.bundles!.cloudflare.secrets).toEqual(["CF_KEY"]);
     expect(out.unbundled_secrets!.set).toEqual(["OTHER_TOKEN"]);
     expect(out.unbundled_secrets!.missing).toEqual([
-      { key: "MISSING_TOKEN", set_with: "ap set MISSING_TOKEN" },
+      { key: "MISSING_TOKEN", set_with: "ap set MISSING_TOKEN --global" },
     ]);
-    expect(out.next).toBe("ap set MISSING_TOKEN");
+    expect(out.next).toBe("ap set MISSING_TOKEN --global");
     expect(JSON.stringify(out).includes("must-not-show")).toBe(false);
 
     const yaml = yamlStringify(out);
@@ -84,14 +86,14 @@ describe("ap show YAML shape", () => {
           ready: false,
           surfaced: [],
           secrets_set: [],
-          missing: [{ key: "NC_API_KEY", set_with: "ap set NC_API_KEY" }],
+          missing: [{ key: "NC_API_KEY", set_with: "ap set NC_API_KEY --global" }],
         },
       },
     });
 
     expect(out.ready).toBe(false);
-    expect(out.next).toBe("ap set NC_API_KEY");
-    expect(out.bundles!.namecheap.next).toBe("ap set NC_API_KEY");
+    expect(out.next).toBe("ap set NC_API_KEY --global");
+    expect(out.bundles!.namecheap.next).toBe("ap set NC_API_KEY --global");
     expect(out.bundles!.namecheap.missing![0]!.key).toBe("NC_API_KEY");
   });
 });
