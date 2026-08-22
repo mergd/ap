@@ -123,6 +123,27 @@ const topics: Record<string, string> = {
     ap init
     ap setup`,
 
+  hooks: `ap hooks — run actions after set/unset
+
+  Bind events in ap.toml or ~/.config/ap/manifest.toml:
+
+    [hooks]
+    after_set = "sync"
+    after_unset = "sync"
+    before_show = "sync"
+
+    [action.sync]
+    run = ["trove", "sync", "--force"]
+
+  after_set / after_unset fail closed. before_show warns and continues.
+  Inside a Trove checkout, after_set/after_unset default to sync (trove sync --force).
+  ap run never runs hooks. Set AP_NO_HOOKS=1 to disable.
+  Use after_set = "none" to turn off the default.
+
+  Examples:
+    echo "$TOKEN" | ap set DEPLOY_TOKEN
+    trove sync --force`,
+
   skill: `ap skill — agent skill (Cursor, Claude Code, Codex)
 
   ap skill install [--project]
@@ -152,6 +173,7 @@ Usage:
   ap setup                         Encrypt project secrets (SOPS + 1Password)
   ap edit <secrets|global|project> [--ui]
   ap skill install [--project]
+  ap help hooks                    Trove sync hooks
 
 Topics: ${Object.keys(topics).join(", ")}
   ap help guide`;

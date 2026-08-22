@@ -32,6 +32,17 @@ export interface ManifestEncryption {
   opAccount?: string;
 }
 
+export const HOOK_EVENTS = ["after_set", "after_unset", "before_show"] as const;
+export type HookEvent = (typeof HOOK_EVENTS)[number];
+
+export type ManifestHooks = {
+  [K in HookEvent]?: string;
+};
+
+export interface ManifestAction {
+  run: string[];
+}
+
 export interface Manifest {
   version: number;
   /** Where vars defined in this file are stored. Declared once at the top of the TOML. */
@@ -42,6 +53,10 @@ export interface Manifest {
   activeBundles?: string[];
   /** Project encryption: 1Password vault/item for the age key (SOPS) */
   encryption?: ManifestEncryption;
+  /** Named hook events bound to actions (`after_set = "sync"`). */
+  hooks?: ManifestHooks;
+  /** Named commands a hook can run. Built-in `sync` is `trove sync --force`. */
+  actions?: Map<string, ManifestAction>;
 }
 
 export interface ResolvedVar {

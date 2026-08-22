@@ -4,11 +4,14 @@ import type {
   BundleDefinition,
   DeriveKind,
   Manifest,
+  ManifestAction,
   ManifestEncryption,
+  ManifestHooks,
   Scope,
   VarDefinition,
   Visibility,
 } from "./types.ts";
+import { HOOK_EVENTS, type HookEvent } from "./types.ts";
 import { isNotFound, readTextFile, writeSecretFile, writeTextFile } from "./fs-helpers.ts";
 import { PROJECT_MANIFEST_NAME } from "./paths.ts";
 
@@ -125,7 +128,7 @@ export function defaultScopeForPath(path: string): Scope {
   return basename(path) === PROJECT_MANIFEST_NAME ? "project" : "global";
 }
 
-const SKIP_KEYS = new Set(["version", "scope", "var", "bundle", "bundles", "encryption"]);
+const SKIP_KEYS = new Set(["version", "scope", "var", "bundle", "bundles", "encryption", "hooks", "action"]);
 
 function parseEncryption(raw: unknown, source: string): ManifestEncryption | undefined {
   if (raw === undefined) return undefined;
@@ -149,6 +152,44 @@ function parseEncryption(raw: unknown, source: string): ManifestEncryption | und
     opItem: entry.op_item,
     ...(typeof entry.op_account === "string" ? { opAccount: entry.op_account } : {}),
   };
+}
+
+function parseHookEvent(value: string, source: string): HookEvent {
+  if ((HOOK_EVENTS as readonly string[]).includes(value)) return value as HookEvent;
+  throw new Error(`${source}: unknown hook "${value}" (expected ${HOOK_EVENTS.join(", ")})`);
+}
+
+function parseHooks(raw: unknown, source: string): ManifestHooks | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new Error(`${source}: [hooks] must be a table`);
+  }
+
+  const entry = raw as Record<string, unknown>;
+  const hooks: ManifestHooks = {};
+  for (const [key, value] of Object.entries(entry)) {
+    const event = parseHookEvent(key, source);
+    if (typeof value !== "string") {
+      throw new Error(`${source}: hooks.${event} must be an action name (string)`);
+    }
+    hooks[event] = value;
+  }
+  return hooks;
+}
+
+function parseActionEntry(name: string, raw: unknown, source: string): ManifestAction {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new Error(`${source}: [action.${name}] must be a table`);
+  }
+  const entry = raw as Record<string, unknown>;
+  if (!Array.isArray(entry.run) || entry.run.length === 0) {
+    throw new Error(`${source}: [action.${name}] requires run = ["cmd", ...]`);
+  }
+  const run = entry.run.filter((part): part is string => typeof part === "string");
+  if (run.length !== entry.run.length || run.length === 0) {
+    throw new Error(`${source}: [action.${name}] run must be an array of strings`);
+  }
+  return { run };
 }
 
 export function parseManifestContent(
@@ -186,6 +227,14 @@ export function parseManifestContent(
     }
   }
 
+  const actions = new Map<string, ManifestAction>();
+  const nestedAction = raw.action;
+  if (nestedAction && typeof nestedAction === "object" && !Array.isArray(nestedAction)) {
+    for (const [name, value] of Object.entries(nestedAction)) {
+      actions.set(name, parseActionEntry(name, value, source));
+    }
+  }
+
   for (const [tomlKey, value] of Object.entries(raw)) {
     if (SKIP_KEYS.has(tomlKey)) continue;
     if (tomlKey.startsWith("var.")) {
@@ -194,6 +243,13 @@ export function parseManifestContent(
     }
     if (tomlKey.startsWith("bundle.")) {
       bundles.set(tomlKey.slice("bundle.".length), parseBundleEntry(tomlKey.slice("bundle.".length), value));
+      continue;
+    }
+    if (tomlKey.startsWith("action.")) {
+      actions.set(
+        tomlKey.slice("action.".length),
+        parseActionEntry(tomlKey.slice("action.".length), value, source),
+      );
       continue;
     }
     throw new Error(`${source}: unknown top-level key "${tomlKey}"`);
@@ -205,8 +261,18 @@ export function parseManifestContent(
   }
 
   const encryption = parseEncryption(raw.encryption, source);
+  const hooks = parseHooks(raw.hooks, source);
 
-  return { version: 1, scope, vars, bundles, activeBundles, encryption };
+  return {
+    version: 1,
+    scope,
+    vars,
+    bundles,
+    activeBundles,
+    encryption,
+    ...(hooks ? { hooks } : {}),
+    ...(actions.size > 0 ? { actions } : {}),
+  };
 }
 
 /**
@@ -271,6 +337,23 @@ export function serializeManifest(manifest: Manifest): string {
     if (manifest.encryption.opAccount) {
       lines.push(`op_account = ${JSON.stringify(manifest.encryption.opAccount)}`);
     }
+    lines.push("");
+  }
+
+  if (manifest.hooks && HOOK_EVENTS.some((event) => manifest.hooks?.[event] !== undefined)) {
+    lines.push("[hooks]");
+    for (const event of HOOK_EVENTS) {
+      const bound = manifest.hooks[event];
+      if (bound === undefined) continue;
+      lines.push(`${event} = ${JSON.stringify(bound)}`);
+    }
+    lines.push("");
+  }
+
+  const sortedActions = [...(manifest.actions?.entries() ?? [])].sort(([a], [b]) => a.localeCompare(b));
+  for (const [name, action] of sortedActions) {
+    lines.push(`[action.${name}]`);
+    lines.push(`run = ${JSON.stringify(action.run)}`);
     lines.push("");
   }
 
@@ -340,4 +423,12 @@ bundles = []
 
 # Example:
 # bundles = ["namecheap", "cloudflare"]
+
+# Optional: bind Trove sync after secret writes (implied inside a Trove checkout)
+# [hooks]
+# after_set = "sync"
+# after_unset = "sync"
+#
+# [action.sync]
+# run = ["trove", "sync", "--force"]
 `;

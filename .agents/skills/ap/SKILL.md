@@ -24,6 +24,9 @@ Local secrets for agents. Bundles group related creds (e.g. `cloudflare`, `namec
 - Use `--global` only when the credential is intentionally shared across repositories
 - Use `sh -c` under `ap run` when the command needs `$VAR` expansion
 - Discover templates: `ap catalog`
+- `ap set` / `ap unset` run hooks (default `trove sync --force` inside a Trove checkout). `ap run` does not.
+- `ap set` / `ap unset` run hooks (default `trove sync --force` inside a Trove checkout). `ap run` does not.
+- `ap set` / `ap unset` run hooks (default `trove sync --force` inside a Trove checkout). `ap run` does not.
 
 ## Commands
 

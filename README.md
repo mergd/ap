@@ -114,6 +114,22 @@ ap skill install [--project]
 
 `ap set` and `ap unset` default to the current repo vault (`.ap/secrets.json`). `-g` is short for `--global` and is required to modify the global manifest. `--project` remains as an explicit, backward-compatible spelling of the default.
 
+## Hooks
+
+`ap set` and `ap unset` can run a named action afterwards. Inside a Trove checkout that action defaults to `trove sync --force` (Trove itself skips the network if it synced in the last 60s, unless `--force`). `ap run` never waits on a hook.
+
+```toml
+# ap.toml — optional; implied inside a Trove working tree
+[hooks]
+after_set = "sync"
+after_unset = "sync"
+
+[action.sync]
+run = ["trove", "sync", "--force"]
+```
+
+`after_set` / `after_unset` fail closed. Bind `before_show` if you want a refresh on `ap show` (warns and continues). Set `after_set = "none"` to disable the default, or `AP_NO_HOOKS=1`.
+
 `ap edit --ui` opens a local Bootstrap-era page on `127.0.0.1` to edit project `ap.toml` (or `-g` / `global` for `manifest.toml`, including global secret values).
 
 Output is human-readable in a terminal and YAML when piped. Catalog bundles: `cloudflare`, `namecheap`, `openrouter`.

@@ -18,6 +18,7 @@ import {
 import { runCommand } from "./run.ts";
 import { createVaultStore, readStdinSecret } from "./vault.ts";
 import type { Scope, VarDefinition } from "./types.ts";
+import { invokeHook } from "./hooks.ts";
 import { getPathsInfo, openInEditor, parseEditTarget, resolveEditPath, resolveEditScope } from "./edit.ts";
 import { installSkill, checkSkillInstallTip } from "./skill-install.ts";
 import { printHelp } from "./help.ts";
@@ -234,6 +235,7 @@ async function cmdSet(
   if (options.scope === "global") {
     await ensureDir(globalHome());
     await setGlobalManifestValue(key, value);
+    await invokeHook("after_set", { projectRoot: projectRoot ?? (await findProjectRoot()) });
     console.log(`${options.fromEnv ? "Adopted" : "Set"} ${key} (global)`);
     return;
   }
@@ -243,6 +245,7 @@ async function cmdSet(
     projectRoot,
   });
   await vault.set(key, value);
+  await invokeHook("after_set", { projectRoot });
   console.log(`${options.fromEnv ? "Adopted" : "Set"} ${key} (project)`);
 }
 
@@ -254,6 +257,7 @@ async function cmdShow(
   bundleFilter?: string,
 ): Promise<void> {
   const projectRoot = globalOnly ? null : await findProjectRoot();
+  await invokeHook("before_show", { projectRoot });
   const result = globalOnly
     ? await runGlobalDoctor(bundleFilter)
     : await runDoctor(projectRoot, bundleFilter);
@@ -278,6 +282,7 @@ async function cmdUnset(key: string, scope: Scope): Promise<void> {
       console.error(`Error: ${key} has no inline value in global manifest`);
       process.exit(1);
     }
+    await invokeHook("after_unset", { projectRoot: await findProjectRoot() });
     console.log(`Unset ${key} (global)`);
     return;
   }
@@ -289,6 +294,7 @@ async function cmdUnset(key: string, scope: Scope): Promise<void> {
     console.error(`Error: ${key} not in project secrets.json`);
     process.exit(1);
   }
+  await invokeHook("after_unset", { projectRoot });
   console.log(`Unset ${key} (project)`);
 }
 

@@ -40,6 +40,25 @@
         }
       },
       "additionalProperties": false
+    },
+    "hooks": {
+      "type": "object",
+      "description": "Bind lifecycle events to named actions. after_set/after_unset default to sync inside a Trove checkout.",
+      "properties": {
+        "after_set": {
+          "type": "string",
+          "description": "Action to run after ap set (fail closed). Use none to disable."
+        },
+        "after_unset": {
+          "type": "string",
+          "description": "Action to run after ap unset (fail closed). Use none to disable."
+        },
+        "before_show": {
+          "type": "string",
+          "description": "Action to run before ap show (fail open). Not bound by default."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "patternProperties": {
@@ -94,6 +113,19 @@
         "prompt": {
           "type": "string",
           "description": "Agent instructions when using this bundle"
+        }
+      },
+      "additionalProperties": false
+    },
+    "^action\\..+$": {
+      "type": "object",
+      "required": ["run"],
+      "properties": {
+        "run": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Command argv to run for this action"
         }
       },
       "additionalProperties": false

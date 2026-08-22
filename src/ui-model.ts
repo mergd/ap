@@ -35,6 +35,8 @@ export interface UiManifestModel {
   catalog: string[];
   /** Preserved from ap.toml; not edited in the UI form. */
   encryption?: ManifestEncryption;
+  hooks?: Manifest["hooks"];
+  actions?: Array<{ name: string; run: string[] }>;
 }
 
 function modeScope(mode: UiMode): Scope {
@@ -110,6 +112,15 @@ export function manifestToUiModel(manifest: Manifest, mode: UiMode): UiManifestM
       .map(varToUi),
     catalog: listCatalogBundles(),
     ...(manifest.encryption ? { encryption: { ...manifest.encryption } } : {}),
+    ...(manifest.hooks ? { hooks: { ...manifest.hooks } } : {}),
+    ...(manifest.actions && manifest.actions.size > 0
+      ? {
+          actions: [...manifest.actions.entries()].map(([name, action]) => ({
+            name,
+            run: [...action.run],
+          })),
+        }
+      : {}),
   };
 }
 
@@ -125,6 +136,14 @@ export function uiModelToManifest(model: UiManifestModel): Manifest {
 
   if (model.encryption) {
     manifest.encryption = { ...model.encryption };
+  }
+
+  if (model.hooks) {
+    manifest.hooks = { ...model.hooks };
+  }
+
+  if (model.actions) {
+    manifest.actions = new Map(model.actions.map((action) => [action.name, { run: [...action.run] }]));
   }
 
   for (const bundle of model.bundles) {
