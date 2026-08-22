@@ -116,19 +116,23 @@ ap skill install [--project]
 
 ## Hooks
 
-`ap set` and `ap unset` can run a named action afterwards. Inside a Trove checkout that action defaults to `trove sync --force` (Trove itself skips the network if it synced in the last 60s, unless `--force`). `ap run` never waits on a hook.
+`ap set` and `ap unset` run a script if you bind one. `after_run` fires after `ap run` in the background and never fails the command.
 
 ```toml
-# ap.toml — optional; implied inside a Trove working tree
+# ap.toml
 [hooks]
-after_set = "sync"
-after_unset = "sync"
-
-[action.sync]
-run = ["trove", "sync", "--force"]
+after_set = ".ap/hooks/sync"
+after_unset = ".ap/hooks/sync"
+after_run = ".ap/hooks/sync"
 ```
 
-`after_set` / `after_unset` fail closed. Bind `before_show` if you want a refresh on `ap show` (warns and continues). Set `after_set = "none"` to disable the default, or `AP_NO_HOOKS=1`.
+```sh
+# .ap/hooks/sync
+#!/bin/sh
+git pull --rebase && git push
+```
+
+`chmod +x .ap/hooks/sync`. If `[hooks]` omits an event, `ap` still runs `.ap/hooks/<event>` when that file exists. `after_set` / `after_unset` fail closed. `before_show` is opt-in (warns and continues). `after_run` is detached: handle errors in the script. Set `after_set = "none"` or `AP_NO_HOOKS=1` to disable.
 
 `ap edit --ui` opens a local Bootstrap-era page on `127.0.0.1` to edit project `ap.toml` (or `-g` / `global` for `manifest.toml`, including global secret values).
 

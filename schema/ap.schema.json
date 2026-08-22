@@ -43,19 +43,23 @@
     },
     "hooks": {
       "type": "object",
-      "description": "Bind lifecycle events to named actions. after_set/after_unset default to sync inside a Trove checkout.",
+      "description": "Bind lifecycle events to executable scripts (paths relative to the project root).",
       "properties": {
         "after_set": {
           "type": "string",
-          "description": "Action to run after ap set (fail closed). Use none to disable."
+          "description": "Script to run after ap set (fail closed). Use none to disable."
         },
         "after_unset": {
           "type": "string",
-          "description": "Action to run after ap unset (fail closed). Use none to disable."
+          "description": "Script to run after ap unset (fail closed). Use none to disable."
         },
         "before_show": {
           "type": "string",
-          "description": "Action to run before ap show (fail open). Not bound by default."
+          "description": "Script to run before ap show (fail open). Unbound unless the file or toml says so."
+        },
+        "after_run": {
+          "type": "string",
+          "description": "Script spawned in the background after ap run. Never blocks or fails ap run."
         }
       },
       "additionalProperties": false

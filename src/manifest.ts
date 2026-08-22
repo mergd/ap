@@ -424,11 +424,9 @@ bundles = []
 # Example:
 # bundles = ["namecheap", "cloudflare"]
 
-# Optional: bind Trove sync after secret writes (implied inside a Trove checkout)
+# Optional: run a script after secret writes (git-hook style)
 # [hooks]
-# after_set = "sync"
-# after_unset = "sync"
-#
-# [action.sync]
-# run = ["trove", "sync", "--force"]
+# after_set = ".ap/hooks/sync"
+# after_unset = ".ap/hooks/sync"
+# after_run = ".ap/hooks/sync"
 `;

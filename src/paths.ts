@@ -26,6 +26,14 @@ export function projectSecretsPath(projectRoot: string): string {
   return join(projectVaultDir(projectRoot), SECRETS_FILE);
 }
 
+export function projectHooksDir(projectRoot: string): string {
+  return join(projectVaultDir(projectRoot), "hooks");
+}
+
+export function projectHookScript(projectRoot: string, event: string): string {
+  return join(projectHooksDir(projectRoot), event);
+}
+
 export function projectSopsYamlPath(projectRoot: string): string {
   return join(projectRoot, ".sops.yaml");
 }

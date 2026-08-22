@@ -123,26 +123,24 @@ const topics: Record<string, string> = {
     ap init
     ap setup`,
 
-  hooks: `ap hooks — run actions after set/unset
+  hooks: `ap hooks — run a script after set/unset
 
-  Bind events in ap.toml or ~/.config/ap/manifest.toml:
+  Bind events in ap.toml to an executable (paths relative to the project root):
 
     [hooks]
-    after_set = "sync"
-    after_unset = "sync"
-    before_show = "sync"
+    after_set = ".ap/hooks/sync"
+    after_unset = ".ap/hooks/sync"
+    after_run = ".ap/hooks/sync"
 
-    [action.sync]
-    run = ["trove", "sync", "--force"]
+  If a hook is unbound, ap runs .ap/hooks/<event> when that file exists.
+  The script does the work (e.g. git pull --rebase && git push). chmod +x it.
 
   after_set / after_unset fail closed. before_show warns and continues.
-  Inside a Trove checkout, after_set/after_unset default to sync (trove sync --force).
-  ap run never runs hooks. Set AP_NO_HOOKS=1 to disable.
-  Use after_set = "none" to turn off the default.
+  after_run is spawned in the background and never fails ap run — handle errors in the script.
+  Set AP_NO_HOOKS=1 to disable. Use after_set = "none" to ignore even .ap/hooks/after_set.
 
   Examples:
-    echo "$TOKEN" | ap set DEPLOY_TOKEN
-    trove sync --force`,
+    echo "$TOKEN" | ap set DEPLOY_TOKEN`,
 
   skill: `ap skill — agent skill (Cursor, Claude Code, Codex)
 
@@ -173,7 +171,7 @@ Usage:
   ap setup                         Encrypt project secrets (SOPS + 1Password)
   ap edit <secrets|global|project> [--ui]
   ap skill install [--project]
-  ap help hooks                    Trove sync hooks
+  ap help hooks                    Hook scripts after set/unset
 
 Topics: ${Object.keys(topics).join(", ")}
   ap help guide`;

@@ -304,7 +304,9 @@ async function cmdRun(cmd: string[], bundleFilter?: string): Promise<void> {
     process.exit(1);
   }
 
-  const code = await runCommand(await findProjectRoot(), cmd, { bundleFilter });
+  const projectRoot = await findProjectRoot();
+  const code = await runCommand(projectRoot, cmd, { bundleFilter });
+  await invokeHook("after_run", { projectRoot });
   process.exit(code);
 }
 

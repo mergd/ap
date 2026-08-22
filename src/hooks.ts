@@ -1,11 +1,14 @@
-import { join, resolve } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 import { loadManifest } from "./manifest.ts";
-import { findProjectRoot, globalManifestPath, projectManifestPath } from "./paths.ts";
+import {
+  findProjectRoot,
+  globalManifestPath,
+  projectHookScript,
+  projectManifestPath,
+} from "./paths.ts";
 import { pathExists } from "./fs-helpers.ts";
 import { spawnAsync, type SpawnOptions } from "./spawn.ts";
-import type { HookEvent, Manifest, ManifestAction, ManifestHooks } from "./types.ts";
-
-export const BUILTIN_SYNC_RUN = ["trove", "sync", "--force"] as const;
+import type { HookEvent, Manifest, ManifestHooks } from "./types.ts";
 
 const DISABLED_VALUES = new Set(["", "none", "off", "false"]);
 
@@ -17,8 +20,7 @@ export type SpawnFn = (
 
 export interface HookPlan {
   event: HookEvent;
-  action: string;
-  run: string[];
+  script: string;
   implied: boolean;
 }
 
@@ -31,25 +33,7 @@ export function hooksDisabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return value === "1" || value === "true";
 }
 
-export async function findTroveRoot(
-  start = process.cwd(),
-  env: NodeJS.ProcessEnv = process.env,
-): Promise<string | null> {
-  if (env.TROVE_DIR) {
-    const override = resolve(env.TROVE_DIR);
-    if (await pathExists(join(override, ".trove"))) return override;
-  }
-
-  let dir = resolve(start);
-  const root = resolve("/");
-  while (true) {
-    if (await pathExists(join(dir, ".trove"))) return dir;
-    if (dir === root) return null;
-    dir = resolve(dir, "..");
-  }
-}
-
-function isDisabledAction(value: string | undefined): boolean {
+function isDisabledBinding(value: string | undefined): boolean {
   return value !== undefined && DISABLED_VALUES.has(value.trim().toLowerCase());
 }
 
@@ -57,78 +41,47 @@ function mergeHooks(project: Manifest | null, global: Manifest | null): Manifest
   return { ...global?.hooks, ...project?.hooks };
 }
 
-function mergeActions(project: Manifest | null, global: Manifest | null): Map<string, ManifestAction> {
-  const actions = new Map<string, ManifestAction>();
-  for (const [name, action] of global?.actions ?? []) actions.set(name, { run: [...action.run] });
-  for (const [name, action] of project?.actions ?? []) actions.set(name, { run: [...action.run] });
-  return actions;
+export function resolveHookScriptPath(projectRoot: string | null, bound: string, cwd = process.cwd()): string {
+  if (isAbsolute(bound)) return bound;
+  return resolve(projectRoot ?? cwd, bound);
 }
 
-function actionRun(
-  name: string,
-  actions: Map<string, ManifestAction>,
-  env: NodeJS.ProcessEnv,
-): string[] {
-  const configured = actions.get(name)?.run;
-  if (configured && configured.length > 0) return [...configured];
-  if (name === "sync") {
-    const bin = env.TROVE_BIN?.trim() || "trove";
-    return [bin, ...BUILTIN_SYNC_RUN.slice(1)];
-  }
-  throw new Error(`unknown hook action "${name}" (define [action.${name}] run = [...])`);
-}
-
-export function resolveHookPlan(
+export async function resolveHookPlan(
   event: HookEvent,
   options: {
     projectManifest?: Manifest | null;
     globalManifest?: Manifest | null;
-    inTroveTree?: boolean;
+    projectRoot?: string | null;
     env?: NodeJS.ProcessEnv;
+    exists?: (path: string) => Promise<boolean>;
   } = {},
-): HookPlan | HookSkip {
+): Promise<HookPlan | HookSkip> {
   const env = options.env ?? process.env;
   if (hooksDisabled(env)) return { skip: "disabled" };
 
+  const exists = options.exists ?? pathExists;
   const merged = mergeHooks(options.projectManifest ?? null, options.globalManifest ?? null);
   const bound = merged[event];
 
-  if (isDisabledAction(bound)) return { skip: "off" };
+  if (isDisabledBinding(bound)) return { skip: "off" };
 
   if (bound && bound.trim()) {
-    const action = bound.trim();
     return {
       event,
-      action,
-      run: actionRun(action, mergeActions(options.projectManifest ?? null, options.globalManifest ?? null), env),
+      script: resolveHookScriptPath(options.projectRoot ?? null, bound.trim()),
       implied: false,
     };
   }
 
-  if (event === "before_show") return { skip: "unbound" };
+  const projectRoot = options.projectRoot;
+  if (!projectRoot) return { skip: "unbound" };
 
-  if (!options.inTroveTree) return { skip: "not-trove" };
-
-  return {
-    event,
-    action: "sync",
-    run: actionRun("sync", mergeActions(options.projectManifest ?? null, options.globalManifest ?? null), env),
-    implied: true,
-  };
-}
-
-export async function commandExists(command: string, spawn: SpawnFn = spawnAsync): Promise<boolean> {
-  try {
-    await spawn(command, ["--version"], {
-      stdin: "ignore",
-      stdout: "ignore",
-      stderr: "ignore",
-    });
-    return true;
-  } catch (err) {
-    const code = err instanceof Error && "code" in err ? (err as NodeJS.ErrnoException).code : undefined;
-    return code !== "ENOENT";
+  const fallback = projectHookScript(projectRoot, event);
+  if (await exists(fallback)) {
+    return { event, script: fallback, implied: true };
   }
+
+  return { skip: "unbound" };
 }
 
 export async function runHookPlan(
@@ -137,38 +90,39 @@ export async function runHookPlan(
     cwd?: string;
     spawn?: SpawnFn;
     fail: "closed" | "open";
+    detached?: boolean;
   },
 ): Promise<void> {
   const spawn = options.spawn ?? spawnAsync;
-  const [command, ...args] = plan.run;
-  if (!command) throw new Error(`hook ${plan.event} action "${plan.action}" has an empty run`);
+  const detached = options.detached ?? false;
 
-  if (plan.implied && !(await commandExists(command, spawn))) return;
+  if (plan.implied && !(await pathExists(plan.script))) return;
 
   let result: { code: number; stdout: string; stderr: string };
   try {
-    result = await spawn(command, args, {
+    result = await spawn(plan.script, [], {
       cwd: options.cwd,
       stdin: "ignore",
-      stdout: "inherit",
-      stderr: "inherit",
+      stdout: detached ? "ignore" : "inherit",
+      stderr: detached ? "ignore" : "inherit",
+      detached,
     });
   } catch (err) {
     const code = err instanceof Error && "code" in err ? (err as NodeJS.ErrnoException).code : undefined;
     const message =
       code === "ENOENT"
-        ? `hook ${plan.event} (${plan.action}): command not found: ${command}`
-        : `hook ${plan.event} (${plan.action}): ${err instanceof Error ? err.message : String(err)}`;
-    if (options.fail === "open") {
+        ? `hook ${plan.event}: script not found: ${plan.script}`
+        : `hook ${plan.event}: ${err instanceof Error ? err.message : String(err)}`;
+    if (options.fail === "open" || detached) {
       console.error(`ap: ${message}`);
       return;
     }
     throw new Error(message);
   }
 
-  if (result.code === 0) return;
+  if (detached || result.code === 0) return;
 
-  const message = `hook ${plan.event} (${plan.action}) failed (exit ${result.code})`;
+  const message = `hook ${plan.event} failed (exit ${result.code})`;
   if (options.fail === "open") {
     console.error(`ap: ${message}`);
     return;
@@ -176,13 +130,15 @@ export async function runHookPlan(
   throw new Error(message);
 }
 
-function failMode(event: HookEvent): "closed" | "open" {
+function hookExec(event: HookEvent): { fail: "closed" | "open"; detached: boolean } {
   switch (event) {
     case "after_set":
     case "after_unset":
-      return "closed";
+      return { fail: "closed", detached: false };
     case "before_show":
-      return "open";
+      return { fail: "open", detached: false };
+    case "after_run":
+      return { fail: "open", detached: true };
     default: {
       const exhaustive: never = event;
       throw new Error(`unhandled hook event: ${exhaustive}`);
@@ -204,23 +160,24 @@ export async function invokeHook(
 
   const startDir = options.startDir ?? options.projectRoot ?? process.cwd();
   const projectRoot = options.projectRoot ?? (await findProjectRoot(startDir));
-  const [globalManifest, projectManifest, troveRoot] = await Promise.all([
+  const [globalManifest, projectManifest] = await Promise.all([
     loadManifest(globalManifestPath()),
     projectRoot ? loadManifest(projectManifestPath(projectRoot)) : Promise.resolve(null),
-    findTroveRoot(startDir, env),
   ]);
 
-  const plan = resolveHookPlan(event, {
+  const plan = await resolveHookPlan(event, {
     projectManifest,
     globalManifest,
-    inTroveTree: troveRoot !== null,
+    projectRoot,
     env,
   });
   if ("skip" in plan) return;
 
+  const exec = hookExec(event);
   await runHookPlan(plan, {
-    cwd: troveRoot ?? projectRoot ?? startDir,
+    cwd: projectRoot ?? startDir,
     spawn: options.spawn,
-    fail: failMode(event),
+    fail: exec.fail,
+    detached: exec.detached,
   });
 }

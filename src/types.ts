@@ -32,7 +32,7 @@ export interface ManifestEncryption {
   opAccount?: string;
 }
 
-export const HOOK_EVENTS = ["after_set", "after_unset", "before_show"] as const;
+export const HOOK_EVENTS = ["after_set", "after_unset", "before_show", "after_run"] as const;
 export type HookEvent = (typeof HOOK_EVENTS)[number];
 
 export type ManifestHooks = {
@@ -53,9 +53,9 @@ export interface Manifest {
   activeBundles?: string[];
   /** Project encryption: 1Password vault/item for the age key (SOPS) */
   encryption?: ManifestEncryption;
-  /** Named hook events bound to actions (`after_set = "sync"`). */
+  /** Hook event → script path (`after_set = ".ap/hooks/sync"`). */
   hooks?: ManifestHooks;
-  /** Named commands a hook can run. Built-in `sync` is `trove sync --force`. */
+  /** Optional named argv lists. Hooks bind to scripts, not these. */
   actions?: Map<string, ManifestAction>;
 }
 

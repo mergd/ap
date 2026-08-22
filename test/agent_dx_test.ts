@@ -114,7 +114,8 @@ describe("skill install generation", () => {
     expect(md).toContain("ap show <bundle> --check");
     expect(md).toContain("ap run <bundle> --");
     expect(md).toContain("ap catalog");
-    expect(md).toContain("trove sync --force");
+    expect(md).toContain(".ap/hooks/<event>");
+    expect(md).toContain("after_run");
     expect(md).toContain("ap set KEY");
     expect(md.includes("paste secrets")).toBe(false);
   });
