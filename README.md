@@ -1,3 +1,7 @@
+<p align="start">
+  <img src="docs/brand/ap-mark.png" width="128" alt="ap">
+</p>
+
 # ap
 
 Agent-portable local secrets. Declare **bundles** of credentials in committed manifests, store global secret values inline in TOML, and keep project secrets in `.ap/secrets.json`. Agents check readiness with `ap show <bundle> --check` before calling external APIs.
