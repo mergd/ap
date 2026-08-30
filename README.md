@@ -108,6 +108,7 @@ ap guide [--human]               Agent contract (primary entrypoint for agents)
 ap show [BUNDLE] [-g] [--check] [--validate]
 ap catalog
 ap set KEY [-g|--global|--project] [--from-env]
+ap load env [-g|--global]
 ap unset KEY [-g|--global|--project]
 ap run [BUNDLE] -- <cmd...>
 ap init [-g|--global] [BUNDLE...]
@@ -117,6 +118,8 @@ ap skill install [--project]
 ```
 
 `ap set` and `ap unset` default to the current repo vault (`.ap/secrets.json`). `-g` is short for `--global` and is required to modify the global manifest. `--project` remains as an explicit, backward-compatible spelling of the default.
+
+`ap load env` adopts every variable declared in the selected manifest from the process environment without printing values. It defaults to project scope; use `--global` for the global manifest.
 
 ## Hooks
 

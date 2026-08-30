@@ -249,6 +249,31 @@ async function cmdSet(
   console.log(`${options.fromEnv ? "Adopted" : "Set"} ${key} (project)`);
 }
 
+async function cmdLoadEnv(scope: Scope): Promise<void> {
+  const root = scope === "project" ? await requireProjectRoot() : null;
+  const manifest = await loadManifest(scope === "global"
+    ? globalManifestPath()
+    : projectManifestPath(root!));
+  if (!manifest) {
+    console.error(scope === "global"
+      ? "Error: no global manifest found"
+      : "Error: no ap.toml found. Run `ap init` first.");
+    process.exit(1);
+  }
+  const keys = [...manifest.vars.keys()];
+  if (keys.length === 0) {
+    console.log(`Loaded 0 environment variables (${scope})`);
+    return;
+  }
+  const missing = keys.filter((key) => !process.env[key]);
+  if (missing.length > 0) {
+    console.error(`Error: ${missing.join(", ")} not set in environment`);
+    process.exit(1);
+  }
+  for (const key of keys) await cmdSet(key, { scope, fromEnv: true });
+  console.log(`Loaded ${keys.length} environment variables (${scope})`);
+}
+
 async function cmdShow(
   format: ReturnType<typeof parseOutputFormat>,
   globalOnly: boolean,
@@ -475,6 +500,15 @@ async function main(): Promise<void> {
           scope: resolveSetScope(args),
           fromEnv: args.includes("--from-env"),
         });
+        break;
+      }
+      case "load": {
+        const sub = rest.find((a) => !a.startsWith("-"));
+        if (sub !== "env") {
+          console.error("Unknown load command. Use: ap load env [--global]");
+          process.exit(1);
+        }
+        await cmdLoadEnv(resolveSetScope(args));
         break;
       }
       case "unset": {

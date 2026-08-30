@@ -52,7 +52,7 @@ export function formatGuideHuman(): string {
     "",
     "Rules: prefer a bundle name on show / run",
     "",
-    "Commands: show, catalog, run, set, unset",
+    "Commands: show, catalog, run, set, load env, unset",
   ].join("\n");
 }
 

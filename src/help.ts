@@ -82,6 +82,18 @@ const topics: Record<string, string> = {
     ap set DEPLOY_TOKEN --from-env
     echo "$KEY" | ap set NC_API_KEY --global`,
 
+  load: `ap load env — store declared environment variables
+
+  ap load env                       process environment → project secrets
+  ap load env --global              process environment → global manifest
+
+  Only variables declared in the selected manifest are loaded. Values are never
+  printed. Missing variables fail before they are stored.
+
+  Examples:
+    ap load env
+    ap load env --global`,
+
   unset: `ap unset — remove a secret (project by default)
 
   ap unset KEY [-g|--global|--project]
